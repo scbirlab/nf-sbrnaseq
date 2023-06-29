@@ -1,0 +1,18 @@
+name: nf-sbrnaseq
+
+channels:
+    - conda-forge
+    - bioconda
+
+dependencies:
+    - python
+    - pip
+    - openjdk
+    - cutadapt
+    - bowtie2
+    - subread
+    - fastqc
+    - multiqc
+    - samtools
+    - umi_tools
+    - nextflow
