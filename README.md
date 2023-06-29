@@ -1,6 +1,6 @@
 # sbRNA-seq pipeline
 
-Nextflow pipeline to process demultiplexed Illumina paired-end FASTQ files from multiple samples into a gene $\times$ cell count table.
+Nextflow pipeline to process demultiplexed Illumina paired-end FASTQ files from multiple bacterial samples into a gene $\times$ cell count table.
 
 ## Processing steps
 
@@ -126,8 +126,7 @@ Here is an example of the sample sheet:
 
 | sample_id | fastq_pattern | genome_id | adapter_read1 | adapter_read2 | umi_read1 | umi_read2 | 
 | --------- | --------- | ------------- | ------------- | --------- | --------- | ------------- |
-| EcoHX1 | G5512A22?? | EcoMG1655-NC_000913.3 | CAGN{6}G{3};e=1...N{7}N{8}TTATTATA | TATAATAAN{8}N{7}...C{3}N{6}CTG | ^(?P<discard_1>.{3})(?P<cell_1>.{6}).* | ^(?P<d
-iscard_2>.{8})(?P<cell_2>.{8})(?P<umi_1>.{7}).* |
+| EcoHX1 | G5512A22?? | EcoMG1655-NC_000913.3 | CAGN{6}G{3};e=1...N{7}N{8}TTATTATA | TATAATAAN{8}N{7}...C{3}N{6}CTG | ^(?P<discard_1>.{3})(?P<cell_1>.{6}).* | ^(?P<discard_2>.{8})(?P<cell_2>.{8})(?P<umi_1>.{7}).* |
 
 ## Outputs
 

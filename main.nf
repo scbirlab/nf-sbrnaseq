@@ -73,7 +73,6 @@ println """\
             quality        : ${params.trim_qual}
             minimum length : ${params.min_length}
          output            
-            FASTQ          : ${fastq_o}
             Processed      : ${processed_o}
             Counts         : ${counts_o}
          """
