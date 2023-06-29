@@ -22,7 +22,7 @@ Per sample:
 
 ### Software
 
-You need to have Nextflow and either `conda` or `mamba` installed on your system. 
+You need to have Nextflow and either `conda` or `mamba` installed on your system. If possible, use `mamba` because it will be faster.
 
 ### Reference genome and genome annotations
 
@@ -33,13 +33,7 @@ You also need the genome FASTA and GFF annotations for the bacteria you are sequ
 3. Click `Send to: > Complete record > File > [FASTQ or GFF3] > Create file`
 4. Save the files to directories which you provide as parameters below.
 
-## Installation
-
-Install the dependencies using `conda`.
-
-```
-conda env create -f https://github.com/sbcirlab/nf-sbrnaseq/environment.yml
-```
+### First time using Nextflow?
 
 If it's your first time using Nextflow on your system, you may need to set the `NXF_HOME` environment variable. For example,
 
@@ -61,16 +55,18 @@ source ~/.bash_profile
 Make a sample sheet (see below) and, optionally, a `nextflow.config` file in the directory where you want the pipeline to run. Then run Nextflow.
 
 ```bash 
-nextflow run sbcirlab/nf-sbrnaseq
+nextflow run scbirlab/nf-sbrnaseq
 ```
 
-Each time you run the pipeline after the first time, Nextflow will use a locally-cached version which will not be updated. To ensure you're using the very latest version, use the `-latest` flag.
+Each time you run the pipeline after the first time, Nextflow will use a locally-cached version which will not be automatically updated. If you want to ensure that you're using the very latest version of the pipeline, use the `-latest` flag.
 
 ```bash 
-nextflow run sbcirlab/nf-sbrnaseq -latest
+nextflow run scbirlab/nf-sbrnaseq -latest
 ```
 
-For help, do `nextflow run sbcirlab/nf-sbrnaseq --help`.
+For help, use `nextflow run scbirlab/nf-sbrnaseq --help`.
+
+The first time you run the pipeline on your system, the software dependencies in `environment.yml` will be installed. This may take several minutes.
 
 ## Inputs
 
