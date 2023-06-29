@@ -21,17 +21,18 @@ if ( params.help ) {
             nextflow run sbcirlab/nf-sbrnaseq -c <config-file>
 
          Required parameters:
-            sample_sheet      Path to a CSV with information about the samples and FASTQ files to be processed
-            fastq_dir         Path to directory containing the FASTQ file.
-            genome_fasta_dir  Path to directory containing genome FASTA files (for mapping)
-            genome_gff_dir    Path to directory containing genome GFF files (for feature counting)
+            sample_sheet         Path to a CSV with information about the samples and FASTQ files to be processed
+            fastq_dir            Path to directory containing the FASTQ file.
+            genome_fasta_dir     Path to directory containing genome FASTA files (for mapping)
+            genome_gff_dir       Path to directory containing genome GFF files (for feature counting)
 
          Optional parameters (with defaults):   
-            trim_qual = 10    For `cutadapt`, the minimum Phred score for trimming 3' calls
-            min_length = 11   For `cutadapt`, the minimum trimmed length of a read. Shorter reads will be discarded
-            strand = 1        featureCounts`, the strandedness of RNA-seq. `1` for forward, `2` for reverse.
-            ann_type = 'gene' For `featureCounts`, features from GFF column 3 to use for counting
-            label = 'Name'    For `featureCounts`, one or more (comma-separated) fields from column 9 of GFF for labeling counts
+            trim_qual = 10       For `cutadapt`, the minimum Phred score for trimming 3' calls
+            min_length = 11      For `cutadapt`, the minimum trimmed length of a read. Shorter reads will be discarded
+            umitools_error = 6   For `umitools`, the number of errors allowed to correct cell barcodes
+            strand = 1           featureCounts`, the strandedness of RNA-seq. `1` for forward, `2` for reverse.
+            ann_type = 'gene'    For `featureCounts`, features from GFF column 3 to use for counting
+            label = 'Name'       For `featureCounts`, one or more (comma-separated) fields from column 9 of GFF for labeling counts
 
          The parameters can be provided either in the `nextflow.config` file or on the `nextflow run` command.
    
@@ -72,6 +73,8 @@ println """\
          trimming 
             quality        : ${params.trim_qual}
             minimum length : ${params.min_length}
+         UMI detection
+            Error number   : ${params.umitools_error}
          output            
             Processed      : ${processed_o}
             Counts         : ${counts_o}
@@ -255,7 +258,7 @@ process UMITOOLS_WHITELIST {
 		--bc-pattern="${umis[0]}" \
 		--bc-pattern2="${umis[1]}" \
       --extract-method=regex \
-      --error-correct-threshold=${umitools_error} \
+      --error-correct-threshold=${params.umitools_error} \
       --ed-above-threshold=correct \
 		--log ${sample_id}.whitelist.log \
 		--stdin ${reads[0]} \

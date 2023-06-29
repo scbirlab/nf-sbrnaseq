@@ -22,7 +22,7 @@ Per sample:
 
 ### Software
 
-You need to have `conda` or `mamba` installed on your system. 
+You need to have Nextflow and either `conda` or `mamba` installed on your system. 
 
 ### Reference genome and genome annotations
 
@@ -62,7 +62,13 @@ Make a sample sheet (see below) and, optionally, a `nextflow.config` file in the
 
 ```bash 
 nextflow run sbcirlab/nf-sbrnaseq
-``` 
+```
+
+Each time you run the pipeline after the first time, Nextflow will use a locally-cached version which will not be updated. To ensure you're using the very latest version, use the `-latest` flag.
+
+```bash 
+nextflow run sbcirlab/nf-sbrnaseq -latest
+```
 
 For help, do `nextflow run sbcirlab/nf-sbrnaseq --help`.
 
@@ -79,6 +85,7 @@ The following parameters have default values can be overridden if necessary.
 
 - `trim_qual = 10` : For `cutadapt`, the minimum Phred score for trimming 3' calls
 - `min_length = 11` : For `cutadapt`, the minimum trimmed length of a read. Shorter reads will be discarded
+- `umitools_error = 6`: For `umitools`, the number of errors allowed to correct cell barcodes
 - `strand = 1` : For `featureCounts`, the strandedness of RNA-seq. `1` for forward, `2` for reverse.
 - `ann_type = 'gene'` : For `featureCounts`, features from GFF column 3 to use for counting
 - `label = 'Name'` : For `featureCounts`, one or more (comma-separated) fields from column 9 of GFF for labeling counts
