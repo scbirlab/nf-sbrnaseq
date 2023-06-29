@@ -104,7 +104,7 @@ params {
 Alternatively, you can provide these on the command line:
 
 ```bash
-nextflow run sbcirlab/nf-sbrnaseq \
+nextflow run scbirlab/nf-sbrnaseq \
     --sample_sheet /path/to/sample_sheet.csv \
     --fastq_dir /path/to/fastqs \
     --genome_fasta_dir /path/to/fastas \
