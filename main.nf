@@ -4,24 +4,32 @@
 ========================================================================================
    Single Bacterium RNASeq Nextflow Workflow
 ========================================================================================
-   Github   : https://www.github.com/scbirlab/nf-sbrnaseq
+   Github   : https://github.com/scbirlab/nf-sbrnaseq
    Contact  : Eachan Johnson <eachan.johnson@crick.ac.uk>
 ----------------------------------------------------------------------------------------
 */
 
 nextflow.enable.dsl=2
 
-/* HELP */
+/*
+========================================================================================
+   Help text
+========================================================================================
+*/
 if ( params.help ) {
    println """\
          S C B I R   s b R N A - S E Q   P I P E L I N E
-         ===================================
+         ===============================================
+         Nextflow pipeline to process demultiplexed Illumina paired-end 
+         FASTQ files from multiple bacterial samples into a gene x
+         cell count table.
+
          Usage:
             nextflow run sbcirlab/nf-sbrnaseq --sample_sheet <csv> --fastq_dir <dir> --genome_fasta_dir <dir> --genome_gff_dir <dir>
             nextflow run sbcirlab/nf-sbrnaseq -c <config-file>
 
          Required parameters:
-            sample_sheet         Path to a CSV with information about the samples and FASTQ files to be processed
+            sample_sheet         Path to a CSV containing sample IDs matched with FASTQ filenames, genome information, and adapter sequences.
             fastq_dir            Path to directory containing the FASTQ file.
             genome_fasta_dir     Path to directory containing genome FASTA files (for mapping)
             genome_gff_dir       Path to directory containing genome GFF files (for feature counting)
@@ -30,7 +38,7 @@ if ( params.help ) {
             trim_qual = 10       For `cutadapt`, the minimum Phred score for trimming 3' calls
             min_length = 11      For `cutadapt`, the minimum trimmed length of a read. Shorter reads will be discarded
             umitools_error = 6   For `umitools`, the number of errors allowed to correct cell barcodes
-            strand = 1           featureCounts`, the strandedness of RNA-seq. `1` for forward, `2` for reverse.
+            strand = 1           For `featureCounts`, the strandedness of RNA-seq. `1` for forward, `2` for reverse.
             ann_type = 'gene'    For `featureCounts`, features from GFF column 3 to use for counting
             label = 'Name'       For `featureCounts`, one or more (comma-separated) fields from column 9 of GFF for labeling counts
 
@@ -40,7 +48,11 @@ if ( params.help ) {
    System.exit(0)
 }
 
-/* CHECK PARAMETERS */
+/*
+========================================================================================
+   Check parameters
+========================================================================================
+*/
 if (!params.sample_sheet) {
    throw new Exception("!!! PARAMETER MISSING: Please provide a path to sample_sheet")
 }
@@ -61,9 +73,9 @@ processed_o = "${working_dir}/processed"
 counts_o = "${working_dir}/counts"
 multiqc_o = "${working_dir}/multi_qc"
 
-println """\
+log.info """\
          S C B I R   s b R N A - S E Q   P I P E L I N E
-         ===================================
+         ===============================================
          inputs
             sample sheet   : ${params.sample_sheet}
             fastq directory: ${params.fastq_dir}
@@ -83,11 +95,14 @@ println """\
 
 dirs_to_make = [processed_o, counts_o, multiqc_o]
 
-dirs_to_make.each {
-   println  """
+log.info  """
             Making directories: 
-               ${it}: """.stripIndent()
-   println file(it).mkdirs() ? "OK" : "Cannot create directory: ${it}"
+         
+          """.stripIndent()
+
+dirs_to_make.each { 
+   log.info "${it}: " 
+   log.info file(it).mkdirs() ? "OK" : "Cannot create directory: ${it}"
 }
 
 /*
@@ -97,7 +112,7 @@ dirs_to_make.each {
 */
 
 csv_ch = Channel.fromPath( params.sample_sheet, 
-                              checkIfExists: true )
+                           checkIfExists: true )
                .splitCsv( header: true )
 sample_ch = csv_ch.map { row -> tuple( row.genome_id,
                                        row.sample_id, 
@@ -142,9 +157,9 @@ workflow {
       | UMITOOLS_COUNT 
 
    TRIM_CUTADAPT.out.logs.concat(
-      FASTQC.out.logs,
-      BOWTIE2_ALIGN.out.logs,
-      FEATURECOUNTS.out.logs)
+         FASTQC.out.logs,
+         BOWTIE2_ALIGN.out.logs,
+         FEATURECOUNTS.out.logs)
       .flatten()
       .unique()
       .collect() \
@@ -342,6 +357,7 @@ process BOWTIE2_ALIGN {
    samtools sort ${sample_id}.mapped.sam \
       -O bam -l 9 -o ${sample_id}.mapped.bam
    samtools index ${sample_id}.mapped.bam
+   rm ${sample_id}.mapped.sam
    """
 }
 
@@ -378,10 +394,11 @@ process UMITOOLS_DEDUP {
  * ## $(LABEL): the tag from column 9 to use to label transcript counts, e.g. "Locus", "Name"
  */
 process FEATURECOUNTS {
-   tag "${sample_id}"
-   errorStrategy 'ignore'
 
-   publishDir(counts_o, mode: 'copy')
+   tag "${sample_id}"
+
+   publishDir( counts_o, 
+               mode: 'copy' )
 
    input:
    tuple val( genome_id ), path( gff ), val( sample_id ), path( bamfile )
@@ -407,9 +424,11 @@ process FEATURECOUNTS {
  * Count unique UMIs per cell per gene
  */
 process UMITOOLS_COUNT {
+
    tag "${sample_id}"
 
-   publishDir(counts_o, mode: 'copy')
+   publishDir( counts_o, 
+               mode: 'copy' )
 
    input:
    tuple val( sample_id ), path( bamfile ), path( bam_idx )

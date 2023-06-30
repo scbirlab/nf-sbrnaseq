@@ -72,7 +72,7 @@ The first time you run the pipeline on your system, the software dependencies in
 
 The following parameters are required:
 
-- `sample_sheet`: path to a CSV with information about the samples and FASTQ files to be processed
+- `sample_sheet`: path to a CSV containing sample IDs matched with FASTQ filenames, genome information, and adapter sequences.
 - `fastq_dir`: path to directory containing the FASTQ files
 - `genome_fasta_dir`: path to directory containing genome FASTA files (for mapping)
 - `genome_gff_dir`: path to directory containing genome GFF files (for feature counting)
