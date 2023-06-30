@@ -15,4 +15,3 @@ dependencies:
     - multiqc
     - samtools
     - umi_tools
-    - nextflow
