@@ -30,7 +30,7 @@ You also need the genome FASTA and GFF annotations for the bacteria you are sequ
 
 1. Search for your strain of interest, and open its main page
 2. On the right-hand side, click `Customize view`, then `Customize` and check `Show sequence`. Finally, click `Update view`. You may have to wait a few minute while the sequence downloads.
-3. Click `Send to: > Complete record > File > [FASTQ or GFF3] > Create file`
+3. Click `Send to: > Complete record > File > [FASTA or GFF3] > Create file`
 4. Save the files to directories which you provide as parameters below.
 
 ### First time using Nextflow?
