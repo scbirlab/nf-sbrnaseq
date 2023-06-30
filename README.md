@@ -35,7 +35,13 @@ You also need the genome FASTA and GFF annotations for the bacteria you are sequ
 
 ### First time using Nextflow?
 
-If it's your first time using Nextflow on your system, you may need to set the `NXF_HOME` environment variable. For example,
+If it's your first time using Nextflow on your system, you can install it using `conda`:
+
+```bash
+conda install -c bioconda nextflow 
+```
+
+You may need to set the `NXF_HOME` environment variable. For example,
 
 ```bash
 mkdir -p ~/.nextflow
