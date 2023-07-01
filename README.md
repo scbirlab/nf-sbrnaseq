@@ -1,6 +1,6 @@
-# sbRNA-seq pipeline
+# Illumina paired-end sbRNA-seq pipeline
 
-Nextflow pipeline to process demultiplexed Illumina paired-end FASTQ files from multiple bacterial samples into a gene $\times$ cell count table.
+Nextflow pipeline to process *already demultiplexed* Illumina paired-end FASTQ files from multiple bacterial samples into a gene $\times$ cell count table.
 
 ## Processing steps
 
@@ -58,7 +58,7 @@ source ~/.bash_profile
 
 ## Quick start
 
-Make a sample sheet (see below) and, optionally, a `nextflow.config` file in the directory where you want the pipeline to run. Then run Nextflow.
+Make a [sample sheet (see below)](#sample-sheet)  and, optionally, a [`nextflow.config` file](#inputs) in the directory where you want the pipeline to run. Then run Nextflow.
 
 ```bash 
 nextflow run scbirlab/nf-sbrnaseq
@@ -124,18 +124,20 @@ The sample sheet is a CSV file providing information about which demultiplexed F
 The file must have a header with the column names below, and one line per sample to be processed.
 
 - `sample_id`: the unique name of the sample
-- `fastq_pattern`: the search glob to find FASTQ files for each sample in `fastq_dir`; should match only two files, corresponding to paired reads
+- `fastq_pattern`: the search glob to find FASTQ files for each sample in `fastq_dir`. The pipleine will look for files matching `<fastq_dir>/*<fastq_pattern>*`, and should match only two files, corresponding to paired reads.
 - `genome_id`: the name of the genome to map to. Each entry must match the name of one file (apart from the extension) in `genome_fasta_dir` and `genome_gff_dir`
-- `adapter_read1`: the adapter on the forward read to trim to in [`cutadapt` format](https://cutadapt.readthedocs.io/en/stable/guide.html#specifying-adapter-sequences)
-- `adapter_read2`:  the adapter on the reverse read to trim to in [`cutadapt` format](https://cutadapt.readthedocs.io/en/stable/guide.html#specifying-adapter-sequences)
+- `n_cells`: maximum number of uniquely barcoded cells in the sample (used by `umi_tools`). This can be more than the number of reads, in which case the number of reads is taken instead.
+- `adapter_read1`: the adapter on the forward read to trim to in [`cutadapt` format](https://cutadapt.readthedocs.io/en/stable/guide.html#specifying-adapter-sequences). Sequences _either side_ will be removed, but the adapters themselves will be retained.
+- `adapter_read2`:  the adapter on the reverse read to trim to in [`cutadapt` format](https://cutadapt.readthedocs.io/en/stable/guide.html#specifying-adapter-sequences). Sequences _either side_ will be removed, but the adapters themselves will be retained.
 - `umi_read1`: the cell barcode and UMI pattern in [`umitools` regex format](https://umi-tools.readthedocs.io/en/latest/regex.html#regex-regular-expression-mode) for the forward read
 - `umi_read2`: the cell barcode and UMI pattern in [`umitools` regex format](https://umi-tools.readthedocs.io/en/latest/regex.html#regex-regular-expression-mode) for the reverse read
 
 Here is an example of the sample sheet:
 
-| sample_id | fastq_pattern | genome_id | adapter_read1 | adapter_read2 | umi_read1 | umi_read2 | 
-| --------- | --------- | ------------- | ------------- | --------- | --------- | ------------- |
-| EcoHX1 | G5512A22?? | EcoMG1655-NC_000913.3 | CAGN{6}G{3};e=1...N{7}N{8}TTATTATA | TATAATAAN{8}N{7}...C{3}N{6}CTG | ^(?P<discard_1>.{3})(?P<cell_1>.{6}).* | ^(?P<discard_2>.{8})(?P<cell_2>.{8})(?P<umi_1>.{7}).* |
+| sample_id | fastq_pattern | genome_id | n_cells | adapter_read1 | adapter_read2 | umi_read1 | umi_read2 | 
+| --------- | --------- | ------------- | ------------- | --------- | --------- | --------- | ------------- |
+| EcoHX1 | G5512A22_R | EcoMG1655-NC_000913.3 | 885000 | CAGN{6}G{3};e=1...N{7}N{8}TTATTATA | TATAATAAN{8}N{7}...C{3}N{6}CTG | ^(?P<discard_1>.{3})(?P<cell_1>.{6}).* | ^(?P<discard_2>.{8})(?P<cell_2>.{8})(?P<umi_1>.{7}).* |
+| EcoHX2 | G5512A23_R | EcoMG1655-NC_000913.3 | 885000 | CAGN{6}G{3};e=1...N{7}N{8}TTATTATA | TATAATAAN{8}N{7}...C{3}N{6}CTG | ^(?P<discard_1>.{3})(?P<cell_1>.{6}).* | ^(?P<discard_2>.{8})(?P<cell_2>.{8})(?P<umi_1>.{7}).* |
 
 ## Outputs
 
