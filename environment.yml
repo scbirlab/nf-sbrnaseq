@@ -5,13 +5,16 @@ channels:
     - bioconda
 
 dependencies:
-    - python
+    - python>=3.8
     - pip
-    - openjdk
-    - cutadapt
-    - bowtie2
-    - subread
-    - fastqc
-    - multiqc
-    - samtools
-    - umi_tools
+    - bioconda::bowtie2
+    - bioconda::fastqc
+    - bioconda::samtools
+    - bioconda::subread
+    - pip:
+        - 'cutadapt>=4.0'
+        - matplotlib
+        - 'multiqc>=1.21'
+        - numpy
+        - pandas
+        - 'umi_tools>=1.0'

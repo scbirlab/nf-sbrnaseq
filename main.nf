@@ -69,9 +69,9 @@ if ( !params.genome_gff_dir ) {
 wd = file(params.sample_sheet)
 working_dir = wd.getParent()
 
-processed_o = "${working_dir}/processed"
-counts_o = "${working_dir}/counts"
-multiqc_o = "${working_dir}/multi_qc"
+processed_o = "${working_dir}/outputs/processed"
+counts_o = "${working_dir}/outputs/counts"
+multiqc_o = "${working_dir}/outputs/multi_qc"
 
 log.info """\
          S C B I R   s b R N A - S E Q   P I P E L I N E
@@ -117,13 +117,14 @@ csv_ch = Channel.fromPath( params.sample_sheet,
 
 sample_ch = csv_ch.map { tuple( it.genome_id,
                                 it.sample_id, 
-                                tuple( it.adapter_read1,
-                                       it.adapter_read2 ),
+                                tuple( it.adapter_read1_3prime,
+                                       it.adapter_read2_3prime,
+                                       it.adapter_read1_5prime,
+                                       it.adapter_read2_5prime ),
                                 tuple( it.umi_read1, 
                                        it.umi_read2 ),
                                 file( "${params.fastq_dir}/*${it.fastq_pattern}*",
-                                      checkIfExists: true ).sort(),
-                                it.n_cells ) }
+                                      checkIfExists: true ).sort() ) }
 
 genome_ch = csv_ch.map { tuple( it.genome_id,
                                 file( "${params.genome_fasta_dir}/${it.genome_id}.fasta",
@@ -144,8 +145,9 @@ workflow {
 
    sample_ch | TRIM_CUTADAPT 
    TRIM_CUTADAPT.out.main | UMITOOLS_WHITELIST
-   TRIM_CUTADAPT.out.main.join( UMITOOLS_WHITELIST.out.main, 
-                                by: 1 ) | UMITOOLS_EXTRACT
+   // TRIM_CUTADAPT.out.main.join( UMITOOLS_WHITELIST.out.main, 
+   //                              by: 1 ) | UMITOOLS_EXTRACT
+   TRIM_CUTADAPT.out.main | UMITOOLS_EXTRACT
 
    genome_ch | BOWTIE2_INDEX 
 
@@ -182,14 +184,14 @@ process FASTQC {
    tag "${sample_id}" 
 
    input:
-   tuple val( genome_id ), val( sample_id ), val( adapters ), val( umis ), path( reads ), val( n_cells )
+   tuple val( genome_id ), val( sample_id ), val( adapters ), val( umis ), path( 'reads_*' )
 
    output:
    path( "*.zip" ), emit: logs
 
    script:
    """
-   zcat ${reads} > ${sample_id}.fastq
+   zcat reads_* > ${sample_id}.fastq
    fastqc --noextract --memory 10000 --threads 4 ${sample_id}.fastq
    rm ${sample_id}.fastq
    """
@@ -207,49 +209,51 @@ process TRIM_CUTADAPT {
                mode: 'copy' )
 
    input:
-   tuple val( genome_id ), val( sample_id ), val( adapters ), val( umis ), path( "${sample_id}_R?.fastq.gz" ), val( n_cells )
+   tuple val( genome_id ), val( sample_id ), val( adapters ), val( umis ), path( reads, stageAs: "?/*" )
 
    output:
-   tuple val( genome_id ), val( sample_id ), val( adapters ), val( umis ), path( "*.with-adapters.fastq.gz" ), val( n_cells ), emit: main
-   tuple val( sample_id ), path( "*.without-adapters.fastq.gz" ), emit: no_adapt
-   tuple path( "*.log" ),  path( "*.json" ), emit: logs
+   tuple val( genome_id ), val( sample_id ), val( adapters ), val( umis ), path( "*.with-adapters.fastq.gz" ), emit: main
+   path( "*.log" ), emit: logs
 
    script:
    """
+   for i in \$(seq 1 2)
+   do
+      zcat */*_R"\$i"*.fastq.gz | gzip --best > ${sample_id}_polyA_R"\$i".fastq.gz
+   done
+
+   cutadapt \
+		-a "A{10}" \
+      -A "T{10}" \
+		-q ${params.trim_qual} \
+		--nextseq-trim ${params.trim_qual} \
+		--minimum-length ${params.min_length} \
+		--report full \
+      --action trim \
+		-o ${sample_id}_3prime_R1.fastq.gz \
+      -p ${sample_id}_3prime_R2.fastq.gz \
+		${sample_id}_polyA_R?.fastq.gz > ${sample_id}.polyA.cutadapt.log
+
    cutadapt \
 		-a "${adapters[0]}" \
       -A "${adapters[1]}" \
-      --overlap 5 \
-		-q ${params.trim_qual} \
-		--nextseq-trim=${params.trim_qual} \
-		--minimum-length ${params.min_length} \
-		--report=full \
-      --action=retain \
-		--untrimmed-output=${sample_id}_R1.without-adapters_0.fastq.gz \
-      --untrimmed-paired-output=${sample_id}_R2.without-adapters_0.fastq.gz \
-		-o ${sample_id}_R1_0.fastq.gz \
-      -p ${sample_id}_R2_0.fastq.gz \
-      --json=${sample_id}.cutadapt.json \
-		${sample_id}_R?.fastq.gz > ${sample_id}_0.cutadapt.log
+      --minimum-length ${params.min_length} \
+		--report full \
+      --action trim \
+		-o ${sample_id}_5prime_R1.fastq.gz \
+      -p ${sample_id}_5prime_R2.fastq.gz \
+		${sample_id}_3prime_R?.fastq.gz > ${sample_id}.3prime.cutadapt.log
 
    cutadapt \
-		-a "^${adapters[0]}" \
-      -A "^${adapters[1]}" \
-		--report=full \
-      --action=retain \
-		--untrimmed-output=${sample_id}_R1.without-adapters_1.fastq.gz \
-      --untrimmed-paired-output=${sample_id}_R2.without-adapters_1.fastq.gz \
+		-g "${adapters[2]}" \
+      -G "${adapters[3]}" \
+		--report full \
+      --action retain \
 		-o ${sample_id}_R1.with-adapters.fastq.gz \
       -p ${sample_id}_R2.with-adapters.fastq.gz \
-      --json=${sample_id}.cutadapt.json \
-		${sample_id}_R?_0.fastq.gz > ${sample_id}.cutadapt.log
+		${sample_id}_5prime_R?.fastq.gz > ${sample_id}.5prime.cutadapt.log
 
-   for i in \$(seq 1 2)
-   do
-      zcat ${sample_id}_R\$i.without-adapters_?.fastq.gz | gzip --best > ${sample_id}_R\$i.without-adapters.fastq.gz
-   done
-
-   rm ${sample_id}_R?_0.fastq.gz ${sample_id}_R?.without-adapters_?.fastq.gz
+   rm ${sample_id}_polyA_R?.fastq.gz
    """
 }
 
@@ -257,6 +261,7 @@ process TRIM_CUTADAPT {
  * Identify cell barcodes
  */
 process UMITOOLS_WHITELIST {
+   errorStrategy 'ignore'
 
    tag "${sample_id}"
 
@@ -264,34 +269,28 @@ process UMITOOLS_WHITELIST {
                mode: 'copy' )
 
    input:
-   tuple val( genome_id ), val( sample_id ), val( adapters ), val( umis ), path( reads ), val( n_cells )
+   tuple val( genome_id ), val( sample_id ), val( adapters ), val( umis ), path( reads )
 
    output:
    tuple path( "*.txt" ), val( sample_id ), emit: main
    path( "*.log" ), emit: logs
+   path( "*.png" ), emit: plots
 
    script:
    """
-   N_LINES=\$(cat "${reads[0]}" | wc -l)
-   echo \$N_LINES
-   N_READS=\$((\$N_LINES/4))
-   N_CELLS=\$(printf \$N_READS'\\n${n_cells}' | sort -g | head -n1)
-   echo \$N_LINES \$N_READS \$N_CELLS
-
    umi_tools whitelist \
-      --knee-method=distance \
-      --set-cell-number \$N_CELLS \
+      --knee-method distance \
       --allow-threshold-error \
       --plot-prefix ${sample_id}.whitelist \
-      --method=umis \
-		--bc-pattern="${umis[0]}" \
-		--bc-pattern2="${umis[1]}" \
-      --extract-method=regex \
-      --error-correct-threshold=${params.umitools_error} \
-      --ed-above-threshold=correct \
+      --method umis \
+		--bc-pattern "${umis[0]}" \
+		--bc-pattern2 "${umis[1]}" \
+      --extract-method regex \
+      --error-correct-threshold ${params.umitools_error} \
+      --ed-above-threshold correct \
 		--log ${sample_id}.whitelist.log \
 		--stdin ${reads[0]} \
-		--read2-in=${reads[1]} \
+		--read2-in ${reads[1]} \
       --stdout ${sample_id}.whitelist.txt
    """
 }
@@ -308,7 +307,8 @@ process UMITOOLS_EXTRACT {
                pattern: "*.extract.log" )
 
    input:
-   tuple val( sample_id ), val( genome_id ), val( adapters ), val( umis ), path( reads ), val( n_cells ), path ( whitelist )
+   tuple val( genome_id ), val( sample_id ),  val( adapters ), val( umis ), path( reads )
+
    output:
    tuple val( genome_id ), val( sample_id ), path( "*.gz" ), emit: main
    path( "*.log" ), emit: logs
@@ -316,18 +316,17 @@ process UMITOOLS_EXTRACT {
    script:
    """
    umi_tools extract \
-		--whitelist=${whitelist} \
-		--bc-pattern="${umis[0]}" \
-		--bc-pattern2="${umis[1]}" \
-      --extract-method=regex \
+		--bc-pattern "${umis[0]}" \
+		--bc-pattern2 "${umis[1]}" \
+      --extract-method regex \
       --error-correct-cell \
-      --quality-filter-mask=${params.trim_qual} \
-      --quality-encoding=phred33 \
+      --quality-filter-mask ${params.trim_qual} \
+      --quality-encoding phred33 \
       --log ${sample_id}.extract.log \
 		--stdin ${reads[0]} \
-		--read2-in=${reads[1]} \
+		--read2-in ${reads[1]} \
 		--stdout ${sample_id}_R1.extracted.fastq.gz \
-		--read2-out=${sample_id}_R2.extracted.fastq.gz
+		--read2-out ${sample_id}_R2.extracted.fastq.gz
    """
 }
 
@@ -358,8 +357,7 @@ process BOWTIE2_ALIGN {
    tag "${sample_id}-${genome_id}" 
 
    publishDir( path: processed_o, 
-               mode: 'copy', 
-               pattern: "*.mapped.bam" )
+               mode: 'copy' )
 
    input:
    tuple val( genome_id ), val( sample_id ), path( reads ), path( idx ), path( gff )
@@ -374,7 +372,9 @@ process BOWTIE2_ALIGN {
       -x ${genome_id} \
       --rdg 10,10 \
       --very-sensitive-local \
-      -1 ${reads[0]} -2 ${reads[1]} -S ${sample_id}.mapped.sam 2> ${sample_id}.bowtie2.log
+      -1 ${reads[0]} -2 ${reads[1]} \
+      -S ${sample_id}.mapped.sam \
+      2> ${sample_id}.bowtie2.log
    samtools sort ${sample_id}.mapped.sam \
       -O bam -l 9 -o ${sample_id}.mapped.bam
    samtools index ${sample_id}.mapped.bam
@@ -386,30 +386,28 @@ process BOWTIE2_ALIGN {
  * Dedupicate reads based on mapping coordinates and UMIs
  */
 process UMITOOLS_DEDUP {
+   errorStrategy 'ignore'
 
    tag "${sample_id}" 
 
    publishDir( processed_o, 
-               mode: 'copy', 
-               pattern: "*.bam" )
-   publishDir( processed_o, 
-               mode: 'copy', 
-               pattern: "*.log" )
-
+               mode: 'copy')
    input:
    tuple val( genome_id ), path( gff ), val( sample_id ), path( bamfile ), path( bam_idx )
 
    output:
    tuple val( genome_id ), path( gff ), val( sample_id ), path( "*.bam" ), emit: main
    path( "*.log" ), emit: logs
+   path( "*.tsv"), emit: stats
 
    script:
    """
    umi_tools dedup \
 		--per-cell \
-		--stdin=${bamfile} \
-		--log=${sample_id}.dedup.log \
-      --stdout=${sample_id}.dedup.bam
+      --output-stats ${sample_id}.dedup \
+		--stdin ${bamfile} \
+		--log ${sample_id}.dedup.log \
+      --stdout ${sample_id}.dedup.bam
    """
 }
 
@@ -464,14 +462,17 @@ process UMITOOLS_COUNT {
    tuple val( sample_id ), path( bamfile ), path( bam_idx )
 
    output:
-   tuple val( sample_id ), path( "*.tsv" )
+   tuple val( sample_id ), path( "*.tsv" ), emit: main
+   path( "*.log" ), emit: logs
 
    script:
    """
    umi_tools count \
 		--per-gene --per-cell \
-		--gene-tag=XT \
-		-I ${bamfile} -S ${sample_id}.umitools_count.tsv
+		--gene-tag XT \
+      --log ${sample_id}.count.log \
+		--stdin  ${bamfile} \
+      --stdout ${sample_id}.umitools_count.tsv
    """
 }
 
@@ -484,7 +485,7 @@ process MULTIQC {
                mode: 'copy' )
 
    input:
-   path '*'
+   path( '*' )
 
    output:
    tuple path( "*.html" ), path( "multiqc_data" )
