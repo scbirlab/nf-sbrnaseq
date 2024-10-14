@@ -217,8 +217,8 @@ workflow {
       .combine( genome_gff, by: 0 )  // sample_id, dedup_bam, gff
       | FEATURECOUNTS  // sample_id, [count_bam_bai]
 
-   // FEATURECOUNTS.out.main
-   //    | UMITOOLS_COUNT   // sample_id, counts
+   FEATURECOUNTS.out.main
+      | UMITOOLS_COUNT   // sample_id, counts
 
    TRIM_CUTADAPT.out.logs
       .concat(
@@ -696,14 +696,16 @@ process UMITOOLS_COUNT {
 
    script:
    """
-   samtools index ${bamfile}
+   samtools sort ${bamfile} -o ${bamfile.getBaseName()}.sorted.bam
+   samtools index ${bamfile.getBaseName()}.sorted.bam
    umi_tools count \
 		--per-gene \
       --per-cell \
 		--gene-tag XT \
       --log ${sample_id}.count.log \
-		--stdin ${bamfile} \
+		--stdin ${bamfile.getBaseName()}.sorted.bam \
       --stdout ${sample_id}.umitools_count.tsv
+   rm ${bamfile.getBaseName()}.sorted.bam
    """
 }
 
