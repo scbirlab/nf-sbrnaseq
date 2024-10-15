@@ -12,9 +12,12 @@ dependencies:
     - bioconda::samtools
     - bioconda::subread
     - pip:
+        - anndata
+        - 'carabiner-tools[mpl,pd]>=0.0.3.post1'
         - 'cutadapt>=4.0'
         - matplotlib
         - 'multiqc>=1.21'
         - numpy
         - pandas
+        - 'scanpy[leiden]'
         - 'umi_tools>=1.1.6'

@@ -196,7 +196,7 @@ workflow {
       .combine( ADD_WHITELIST_ERRORS.out, by: 0 )  // wl_id, sample_id, whitelist_err
       .map { it[1..-1] }  // sample_id, whitelist_err
       .set { whitelists }
-   // TRIM_CUTADAPT.out.main | UMITOOLS_WHITELIST
+
    TRIM_CUTADAPT.out.main  // sample_id, [reads]
       .combine( umi_ch, by: 0 )  // sample_id, [reads], umis
       .combine( whitelists, by: 0 )  // sample_id, [reads], umis, whitelist
@@ -205,9 +205,6 @@ workflow {
    UMITOOLS_EXTRACT.out.main
       .combine( genome_idx, by: 0 )  // sample_id, [reads], [genome_idx], genome_acc
       | BOWTIE2_ALIGN  // sample_id, [bam_bai]
-
-   // BOWTIE2_ALIGN.out.main
-   //    | UMITOOLS_DEDUP  // sample_id, dedup_bam
 
    BOWTIE2_ALIGN.out.main
       .combine( DOWNLOAD_UMICOLLAPSE.out )  // sample_id, [bam_bai], umicollapse_repo
@@ -219,6 +216,20 @@ workflow {
 
    FEATURECOUNTS.out.main
       | UMITOOLS_COUNT   // sample_id, counts
+   UMITOOLS_COUNT.out.main
+      | MAKE_COUNT_MATRIX
+   UMITOOLS_COUNT.out.main
+      .combine( FEATURECOUNTS.out.table, by: 0 )  // sample_id, umitools_counts, featurecounts_counts
+      | JOIN_FEATURECOUNTS_UMITOOLS
+   JOIN_FEATURECOUNTS_UMITOOLS.out.all_counts
+      | PLOT_UMI_DISTRIBUTIONS   
+   JOIN_FEATURECOUNTS_UMITOOLS.out.cells_per_gene
+      | PLOT_CELLS_PER_GENE_DISTRIBUTION
+   JOIN_FEATURECOUNTS_UMITOOLS.out.genes_per_cell
+      | PLOT_GENES_PER_CELL_DISTRIBUTION
+
+   JOIN_FEATURECOUNTS_UMITOOLS.out.all_counts
+      | MAKE_ANNDATA
 
    TRIM_CUTADAPT.out.logs
       .concat(
@@ -249,8 +260,6 @@ process DOWNLOAD_UMICOLLAPSE {
    curl -L https://repo1.maven.org/maven2/com/github/samtools/htsjdk/2.19.0/htsjdk-2.19.0.jar > \$UMI_LIB_PATH/htsjdk-2.19.0.jar
    curl -L https://repo1.maven.org/maven2/org/xerial/snappy/snappy-java/1.1.7.3/snappy-java-1.1.7.3.jar > \$UMI_LIB_PATH/snappy-java-1.1.7.3.jar
    """
-
-
 }
 
 process DOWNLOAD_GENOME {
@@ -364,51 +373,9 @@ process TRIM_CUTADAPT {
    """
 }
 
-/*
- * Identify cell barcodes
- */
-process UMITOOLS_WHITELIST {
-   errorStrategy 'ignore'
-
-   tag "${sample_id}"
-
-   publishDir( processed_o, 
-               mode: 'copy' )
-
-   input:
-   tuple val( genome_id ), val( sample_id ), val( adapters ), val( umis ), path( reads )
-
-   output:
-   tuple path( "*.txt" ), val( sample_id ), emit: main
-   path( "*.log" ), emit: logs
-   path( "*.png" ), emit: plots
-
-   script:
-   """
-   umi_tools whitelist \
-      --knee-method distance \
-      --allow-threshold-error \
-      --plot-prefix ${sample_id}.whitelist \
-      --method umis \
-		--bc-pattern "${umis[0]}" \
-		--bc-pattern2 "${umis[1]}" \
-      --extract-method regex \
-      --error-correct-threshold ${params.umitools_error} \
-      --ed-above-threshold correct \
-		--log ${sample_id}.whitelist.log \
-		--stdin ${reads[0]} \
-		--read2-in ${reads[1]} \
-      --stdout ${sample_id}.whitelist.txt
-   """
-}
-
 // Build whitelist from provided barcode files
 process BUILD_WHITELIST {
    tag "${whitelist_id}"
-
-   publishDir( processed_o, 
-               mode: 'copy', 
-               pattern: "*.txt" )
 
    input:
    tuple val( whitelist_id ), path( bcs )
@@ -438,10 +405,6 @@ process BUILD_WHITELIST {
 // Build whitelist from provided barcode files
 process ADD_WHITELIST_ERRORS {
    tag "${whitelist_id}"
-
-   publishDir( processed_o, 
-               mode: 'copy', 
-               pattern: "*.txt" )
 
    input:
    tuple val( whitelist_id ), path( whitelist )
@@ -568,43 +531,6 @@ process BOWTIE2_ALIGN {
    """
 }
 
-/*
- * Dedupicate reads based on mapping coordinates and UMIs
- */
-process UMITOOLS_DEDUP {
-
-   tag "${sample_id}" 
-
-   label 'big_mem'
-   // errorStrategy 'retry'
-   // maxRetries 2
-
-   publishDir( processed_o, 
-               mode: 'copy' )
-   input:
-   tuple val( sample_id ), path( bamfile )
-
-   output:
-   tuple val( sample_id ), path( "*.bam" ), emit: main
-   path( "*.log" ), emit: logs
-   path( "*.tsv"), emit: stats
-
-   script:
-   """
-   samtools index ${bamfile}
-   umi_tools dedup \
-		--per-cell \
-      --paired \
-      --method unique \
-      --chimeric-pairs discard \
-      --unmapped-reads discard \
-		--stdin ${bamfile} \
-		--log ${sample_id}.dedup.log \
-      --stdout ${sample_id}.dedup.bam
-   #umicollapse bam -i ${bamfile} -o ${sample_id}.dedup.bam --paired --two-pass
-   """
-}
-
 
 process UMICOLLAPSE {
 
@@ -630,7 +556,6 @@ process UMICOLLAPSE {
    """
 }
 
-
 /*
  * Use featureCounts (from the SubReads package) to count transcripts mapping to each gene
  * ## $(ANN_TYPE): which of "CDS", "gene", "mRNA", etc
@@ -645,17 +570,15 @@ process FEATURECOUNTS {
 
    publishDir( counts_o, 
                mode: 'copy', 
-               pattern: "*.tsv" )
-   publishDir( counts_o, 
-               mode: 'copy', 
-               pattern: "*.summary" )
+               pattern: "*.log" )
 
    input:
    tuple val( sample_id ), path( bamfile ), path( gff )
 
    output:
    tuple val( sample_id ), path( "*.bam" ), emit: main
-   tuple path( "*.summary" ), path( "*.tsv" ), emit: logs
+   tuple val( sample_id ), path( "*.tsv" ), emit: table
+   path "*.summary", emit: logs
 
    script:
    """
@@ -671,6 +594,7 @@ process FEATURECOUNTS {
       --verbose \
       --extraAttributes gene_biotype,locus_tag \
       -o ${sample_id}.featureCounts.tsv ${bamfile}
+   cp ${sample_id}.featureCounts.tsv.summary ${sample_id}.featureCounts.log
    """
 }
 
@@ -683,9 +607,6 @@ process UMITOOLS_COUNT {
 
    errorStrategy 'retry'
    maxRetries 2
-
-   publishDir( counts_o, 
-               mode: 'copy' )
 
    input:
    tuple val( sample_id ), path( bamfile )
@@ -708,6 +629,370 @@ process UMITOOLS_COUNT {
    rm ${bamfile.getBaseName()}.sorted.bam
    """
 }
+
+
+process MAKE_COUNT_MATRIX {
+   tag "${sample_id}"
+   label "big_mem"
+
+   publishDir( counts_o, 
+               mode: 'copy' )
+
+   input:
+   tuple val( sample_id ), path( umitools_table )
+
+   output:
+   tuple val( sample_id ), path( "*.tsv.gz" )
+
+   script:
+   """
+   #!/usr/bin/env python
+   from scipy.sparse import csr_matrix
+   from pandas.api.types import CategoricalDtype
+   import pandas as pd
+
+   df = pd.read_csv("${umitools_table}", sep='\\t')
+   cell_cat = CategoricalDtype(sorted(df["cell"].unique()), ordered=True)
+   gene_cat = CategoricalDtype(sorted(df["gene"].unique()), ordered=True)
+
+   cell_idx = df["cell"].astype(cell_cat).cat.codes
+   gene_idx = df["gene"].astype(gene_cat).cat.codes
+   matrix = csr_matrix(
+      (df["count"], (cell_idx, gene_idx)),
+      shape=(cell_cat.categories.size, gene_cat.categories.size)
+   )
+   df = pd.DataFrame.sparse.from_spmatrix(
+      matrix,
+      index=cell_cat.categories,
+      columns=gene_cat.categories,
+   )
+   df.to_csv("${sample_id}.count-matrix.tsv.gz", sep='\\t')
+   """
+}
+
+
+process MAKE_ANNDATA {
+   tag "${sample_id}"
+   label "big_mem"
+
+   publishDir( counts_o, 
+               mode: 'copy' )
+
+   input:
+   tuple val( sample_id ), path( counts_table )
+
+   output:
+   tuple val( sample_id ), path( "*.h5ad" ), path( "*.png" )
+
+   script:
+   """
+   #!/usr/bin/env python
+
+   import anndata as ad
+   from carabiner import print_err
+   from carabiner.mpl import figsaver, grid
+   import pandas as pd
+   import numpy as np
+   import scanpy as sc
+
+   from scipy.sparse import csr_matrix
+   from pandas.api.types import CategoricalDtype
+
+   CELL_ID = "cell_barcode"
+   GENE_ID = "gene_id"
+   MIN_GENES_PER_CELL = 20
+   MIN_CELLS_PER_GENE = 1
+
+   print_err("Loading ${counts_table} as a sparse matrix...")
+   df = pd.read_csv("${counts_table}", sep="\\t", low_memory=False)
+   cell_cat = CategoricalDtype(sorted(df[CELL_ID].unique()), ordered=True)
+   gene_cat = CategoricalDtype(sorted(df[GENE_ID].unique()), ordered=True)
+
+   cell_idx = df[CELL_ID].astype(cell_cat).cat.codes
+   gene_idx = df[GENE_ID].astype(gene_cat).cat.codes
+   matrix = csr_matrix(
+      (df["umi_count"].astype(float), (cell_idx, gene_idx)),
+      shape=(cell_cat.categories.size, gene_cat.categories.size)
+   )
+   matrix_df = pd.DataFrame.sparse.from_spmatrix(
+      matrix,
+      index=cell_cat.categories,
+      columns=gene_cat.categories,
+   )
+   adata = ad.AnnData(matrix_df)
+   print_err(adata)
+   adata.uns["sample_id"] = "${sample_id}"
+
+   print_err("Annotating gene features...")
+   gene_ann_columns = ["locus_tag", "gene_biotype", "featurecounts_count", "Length"]
+   gene_ann_df = df[[GENE_ID] + gene_ann_columns].drop_duplicates().set_index(GENE_ID)
+   gene_ann_df = gene_ann_df.loc[adata.var_names,:]
+   for col in gene_ann_columns:
+      adata.var[col.casefold()] = gene_ann_df[col]
+
+   adata.var["ribo"] = (adata.var["gene_biotype"] == "rRNA")
+   adata.var["trna"] = (adata.var["gene_biotype"] == "tRNA")
+   adata.var["ncrna"] = (adata.var["gene_biotype"] == "ncRNA")
+   print_err(adata)
+
+   print_err("Calculating QC metrics...")
+   sc.pp.calculate_qc_metrics(
+      adata, 
+      qc_vars=["ribo", "trna", "ncrna"], 
+      inplace=True, 
+      percent_top=[20], 
+      log1p=True,
+   )
+   print_err(adata)
+   print_err(f"Filtering cells with {MIN_GENES_PER_CELL=}...")
+   sc.pp.filter_cells(
+      adata, 
+      min_genes=MIN_GENES_PER_CELL,
+   )
+   print_err(adata)
+   print_err(f"Filtering genes with {MIN_CELLS_PER_GENE=}...")
+   sc.pp.filter_genes(
+      adata, 
+      min_cells=MIN_CELLS_PER_GENE,
+   )
+   print_err(adata)
+   print_err("Applying PCA...")
+   sc.pp.pca(
+      adata, 
+   )
+   print_err("Getting nearest neighbours...")
+   sc.pp.neighbors(
+      adata, 
+      n_neighbors=15, 
+      metric='cosine',
+   )
+   print_err("Carrying out Leiden clustering...")
+   sc.tl.leiden(
+      adata, 
+      key_added="leiden_res1", 
+      resolution=1.,
+      flavor='igraph',
+      directed=False,
+   )
+   print_err(f"Found {adata.obs['leiden_res1'].cat.categories.size=} Leiden clusters!")
+   print_err("Embedding as UMAP...")
+   sc.tl.umap(
+      adata, 
+   )
+   print_err("Saving as ${sample_id}.h5ad...")
+   adata.write("${sample_id}.h5ad", compression="gzip")
+
+   colors_to_plot = [
+      "total_counts", 
+      "pct_counts_ribo", 
+      "pct_counts_trna",
+      "pct_counts_ncrna",
+      "leiden_res1",
+   ]
+   print_err("Making UMAP plots...")
+   fig, axes = grid(ncol=len(colors_to_plot), aspect_ratio=1.1)
+   for ax, col in zip(axes, colors_to_plot):
+      colors = adata.obs[col]
+      if isinstance(colors, pd.Series) and colors.dtype == "category":
+         colors = [f"C{i}" for i in colors.cat.codes]
+      sc = ax.scatter(
+         adata.obsm['X_umap'][:,0],
+         adata.obsm['X_umap'][:,1],
+         c=colors,
+         cmap="cividis",
+         s=.5,
+         alpha=.7,
+         norm="log" if col == "total_counts" else None,
+      )
+      if isinstance(colors, pd.Series) and colors.dtype != "category":
+         cb = fig.colorbar(sc, ax=ax)
+      ax.set(title=col, xlabel="UMAP_1", ylabel="UMAP_2")
+   print_err("Saving UMAP plots as ${sample_id}.umap...")
+   figsaver()(
+      fig=fig,
+      name='${sample_id}.umap',
+   )
+   print_err("Done!")
+   """
+}
+
+
+
+process JOIN_FEATURECOUNTS_UMITOOLS {
+
+   tag "${sample_id}"
+
+   publishDir( counts_o, 
+               mode: 'copy' )
+
+   input:
+   tuple val( sample_id ), path( umitools_table ), path( featurecounts_table )
+
+   output:
+   tuple val( sample_id ), path( "*.all-counts.tsv" ), emit: all_counts
+   tuple val( sample_id ), path( "*.umis-and-cells-per-gene.tsv" ), emit: cells_per_gene
+   tuple val( sample_id ), path( "*.genes-per-cell.tsv" ), path( "*.genes-per-biotype-per-cell.tsv" ), emit: genes_per_cell
+
+   script:
+   """
+   set -x
+   grep -v '^#' ${featurecounts_table} | tr \$'\\t' , > fc0.csv
+   LOCUS_TAG_COL=\$(head -n1 fc0.csv | tr , \$'\\n' | grep -n "Geneid" | cut -d: -f1)
+   cat \
+   <(head -n1 fc0.csv | awk -F, -v OFS=, '{ print "gene_id",\$0 }' | sed 's/,${sample_id}.*\\.dedup\\.bam\$/,featurecounts_count/' )\
+   <(tail -n+2 fc0.csv \
+      | awk -F, -v OFS=, '{ print \$'\$LOCUS_TAG_COL',\$0}' \
+      | sort -k1 -t, ) \
+   > fc.csv
+
+   cat ${umitools_table} | tr \$'\\t' , > ut0.csv
+   cat \
+   <(head -n1 ut0.csv | sed 's/,count\$/,umi_count/;s/^gene,/gene_id,/;s/,cell,/,cell_barcode,/' ) \
+   <(tail -n+2 ut0.csv | sort -k1 -t, ) \
+   > ut.csv
+
+   python -c \
+      'import pandas as pd; pd.read_csv("fc.csv").merge(pd.read_csv("ut.csv")).assign(sample_id="${sample_id}").set_index(["sample_id", "gene_id", "locus_tag", "cell_barcode"]).reset_index().to_csv("${sample_id}.all-counts.tsv", sep="\\t", index=False)'
+   python -c \
+      'import pandas as pd; df = pd.read_csv("ut.csv").groupby("gene_id"); df[["cell_barcode"]].count().reset_index().merge(df[["umi_count"]].sum().reset_index()).merge(pd.read_csv("fc.csv")).rename(columns=dict(cell_barcode="cell_count")).to_csv("${sample_id}.umis-and-cells-per-gene.tsv", sep="\\t", index=False)'
+   python -c \
+      'import pandas as pd; df = pd.read_csv("${sample_id}.all-counts.tsv", sep="\\t", low_memory=False).groupby("cell_barcode"); df[["gene_id"]].count().reset_index().merge(df[["umi_count"]].sum().reset_index()).rename(columns=dict(gene_id="gene_count")).sort_values("umi_count").to_csv("${sample_id}.genes-per-cell.tsv", sep="\\t", index=False)' 
+   python -c \
+      'import pandas as pd; df = pd.read_csv("${sample_id}.all-counts.tsv", sep="\\t", low_memory=False).groupby(["cell_barcode", "gene_biotype"]); df[["gene_id"]].count().reset_index().merge(df[["umi_count"]].sum().reset_index()).rename(columns=dict(gene_id="gene_count")).sort_values("umi_count").to_csv("${sample_id}.genes-per-biotype-per-cell.tsv", sep="\\t", index=False)'
+   """
+}
+
+
+process PLOT_UMI_DISTRIBUTIONS {
+   tag "${sample_id}"
+
+   publishDir( counts_o, 
+               mode: 'copy' )
+
+   input:
+   tuple val( sample_id ), path( umi_table )
+
+   output:
+   tuple val( sample_id ), path( "*.png" )
+
+   script:
+   """
+   #!/usr/bin/env python
+
+   from carabiner.mpl import figsaver, scattergrid
+   import pandas as pd
+   
+   biotype_blocklist = [
+      #"SRP_RNA",
+      #"antisense_RNA",
+   ]
+   df = pd.read_csv(
+      "${umi_table}", 
+      sep='\\t',
+      low_memory=False,
+   ).query("~gene_biotype.isin(@biotype_blocklist)")  # very low representation, breaks histogram bins
+
+   fig, axes = scattergrid(
+      df,
+      grid_columns=["umi_count", "umi_count"],
+      log=["umi_count", "umi_count"],
+      grouping=["gene_biotype"],
+      aspect_ratio=1.25,
+   )
+   for ax in fig.axes:
+      ax.set(yscale="log")
+   figsaver()(
+      fig=fig,
+      name='${sample_id}.umi-hist',
+   )
+
+   """
+   
+}
+
+
+process PLOT_CELLS_PER_GENE_DISTRIBUTION {
+   tag "${sample_id}"
+
+   publishDir( counts_o, 
+               mode: 'copy' )
+
+   input:
+   tuple val( sample_id ), path( cells_per_gene_table )
+
+   output:
+   tuple val( sample_id ), path( "*.png" )
+
+   script:
+   """
+   #!/usr/bin/env python
+
+   from carabiner.mpl import figsaver, scattergrid
+   import pandas as pd
+   
+   df = pd.read_csv(
+      "${cells_per_gene_table}", 
+      sep='\\t',
+   ) 
+
+   fig, axes = scattergrid(
+      df,
+      grid_columns=["umi_count", "cell_count"],
+      log=["umi_count", "cell_count"],
+   )
+   figsaver()(
+      fig=fig,
+      name='${sample_id}.umis-and-cells-per-gene',
+   )
+
+   """
+   
+}
+
+
+process PLOT_GENES_PER_CELL_DISTRIBUTION {
+   tag "${sample_id}"
+
+   publishDir( counts_o, 
+               mode: 'copy' )
+
+   input:
+   tuple val( sample_id ), path( gene_table ), path( gene_biotype_table )
+
+   output:
+   tuple val( sample_id ), path( "*.png" )
+
+   script:
+   """
+   #!/usr/bin/env python
+
+   from carabiner.mpl import figsaver, scattergrid
+   import pandas as pd
+   
+   for f in ("${gene_table}", "${gene_biotype_table}"):
+      df = pd.read_csv(
+         f, 
+         sep='\\t',
+      ) 
+      using_biotype = ("gene_biotype" in df)
+      fig, axes = scattergrid(
+         df,
+         grid_columns=["umi_count", "gene_count"],
+         log=["umi_count", "gene_count"],
+         grouping=["gene_biotype"] if using_biotype else None,
+         aspect_ratio=1.25 if using_biotype else 1.,
+      )
+      for ax in fig.axes:
+         ax.set(yscale="log")
+      figsaver()(
+         fig=fig,
+         name=f.split(".tsv")[0],
+      )
+
+   """
+   
+}
+
 
 /*
  * Make log report
