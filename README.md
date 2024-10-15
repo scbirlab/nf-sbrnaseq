@@ -21,6 +21,13 @@ For each sample:
 4. Deduplicate mapped reads using `umitools`.
 5. Count deduplicated reads per gene using `featureCounts`.
 6. Count deduplicated reads per gene per cell using `umi-tools`.
+7. Plot:
+    - Histogram of UMIs per cell per gene
+    - Histogram of unique genes per cell
+    - Histogram of unique cells per gene
+    - Scatter of UMI count vs gene count
+    - Scatter of UMI count vs cell count
+8. Use `scanpy` to filter cells to have > 20 unique genes, and filter genes to be found in > 0 cells, run basic QC, Leiden cluster and UMAP embed with default settings, and save resulting plots and AnnData object as `.h5ad` for downstream analysis.  
 
 ### Downstream analyses [work in progress, not yet implemented]
 
@@ -133,6 +140,7 @@ The file must have a header with the column names below, and one line per sample
 - `sample_id`: the unique name of the sample
 - `genome_id`: The [NCBI assembly accession](https://www.ncbi.nlm.nih.gov/datasets/genome/) number for the organism that the guide RNAs are targeting. This number starts with "GCF_" or "GCA_".
 - `fastq_pattern`: the search glob to find FASTQ files for each sample in `fastq_dir`. The pipleine will look for files matching `<fastq_dir>/*<fastq_pattern>*`, and should match only two files, corresponding to paired reads.
+- `bc1`, `bc2`, `bc3`: Files containg barcodes corresponding to `<cell_1>`, `<cell_2>`, and `<cell_3>` in `umi_read*` columns.
 - `adapter_read1_3prime`: the 3' adapter on the forward read to trim to in [`cutadapt` format](https://cutadapt.readthedocs.io/en/stable/guide.html#specifying-adapter-sequences). The adapter itself and sequences downstream will be removed.
 - `adapter_read2_3prime`:  the 3' adapter on the reverse read to trim to in [`cutadapt` format](https://cutadapt.readthedocs.io/en/stable/guide.html#specifying-adapter-sequences). The adapter itself and sequences downstream will be removed.
 - `adapter_read1_5prime`: the 5' adapter on the forward read to trim to in [`cutadapt` format](https://cutadapt.readthedocs.io/en/stable/guide.html#specifying-adapter-sequences). Sequences _upstream_ will be removed, but the adapters themselves will be retained.
@@ -142,9 +150,9 @@ The file must have a header with the column names below, and one line per sample
 
 Here is an example of the sample sheet:
 
-| sample_id | fastq_pattern | genome_id | adapter_read1_3prime | adapter_read2_3prime | adapter_read1_5prime | adapter_read2_5prime | umi_read1 | umi_read2 |
-| --------- | --------- | ------------- | ------------- | --------- | --------- | --------- | --------- | ------------- |
-| EcoHX1 | G5512A22_R | GCF_904425475.1 | CAGN{6}G{3} | N{7}N{8}TTATTATA | TATAATAAN{8}N{7} | C{3}N{6}CTG | ^(?P<discard_1>.{3})(?P<cell_1>.{6}).* | ^(?P<discard_2>.{8})(?P<cell_2>.{8})(?P<umi_1>.{7}).* |
+| sample_id | fastq_pattern | genome_id | bc1 | bc2 | bc3 | adapter_read1_3prime | adapter_read2_3prime | adapter_read1_5prime | adapter_read2_5prime | umi_read1 | umi_read2 |
+| --------- | ------------- | --------- | --- | --- | --- | ------------- | --------- | --------- | --------- | --------- | ------------- |
+| EcoHX1 | G5512A22_R | GCF_904425475.1 | bc1.csv | bc2.csv | bc3.csv | CAGN{6}G{3} | N{7}N{8}TTATTATA | TATAATAAN{8}N{7} | C{3}N{6}CTG | ^(?P<discard_1>.{3})(?P<cell_1>.{6}).* | ^(?P<discard_2>.{8})(?P<cell_2>.{8})(?P<umi_1>.{7}).* |
 | EcoHX2 | G5512A23_R | GCF_904425475.1 | CAGN{6}G{3} | N{7}N{8}TTATTATA | TATAATAAN{8}N{7} | C{3}N{6}CTG | ^(?P<discard_1>.{3})(?P<cell_1>.{6}).* | ^(?P<discard_2>.{8})(?P<cell_2>.{8})(?P<umi_1>.{7}).* |
 
 ## Outputs
