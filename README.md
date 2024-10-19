@@ -153,7 +153,16 @@ Here is an example of the sample sheet:
 | sample_id | fastq_pattern | genome_id | bc1 | bc2 | bc3 | adapter_read1_3prime | adapter_read2_3prime | adapter_read1_5prime | adapter_read2_5prime | umi_read1 | umi_read2 |
 | --------- | ------------- | --------- | --- | --- | --- | ------------- | --------- | --------- | --------- | --------- | ------------- |
 | EcoHX1 | G5512A22_R | GCF_904425475.1 | bc1.csv | bc2.csv | bc3.csv | CAGN{6}G{3} | N{7}N{8}TTATTATA | TATAATAAN{8}N{7} | C{3}N{6}CTG | ^(?P<discard_1>.{3})(?P<cell_1>.{6}).* | ^(?P<discard_2>.{8})(?P<cell_2>.{8})(?P<umi_1>.{7}).* |
-| EcoHX2 | G5512A23_R | GCF_904425475.1 | CAGN{6}G{3} | N{7}N{8}TTATTATA | TATAATAAN{8}N{7} | C{3}N{6}CTG | ^(?P<discard_1>.{3})(?P<cell_1>.{6}).* | ^(?P<discard_2>.{8})(?P<cell_2>.{8})(?P<umi_1>.{7}).* |
+| EcoHX2 | G5512A23_R | GCF_904425475.1 | bc1.csv | bc2.csv | bc3.csv | ^(?P<discard_1>.{3})(?P<cell_1>.{6}).* | ^(?P<discard_2>.{8})(?P<cell_2>.{8})(?P<umi_1>.{7}).* |
+
+And here is an example barcode file:
+
+| Barcode ID | Sequence |
+| ---------- | -------- |
+| barcode-01 | ATCGATCC |
+| barcode-02 | TAGCTAGG |
+
+It must have a header row and two columns, with the second column being the barcode sequence.
 
 ## Outputs
 
