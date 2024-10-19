@@ -10,6 +10,7 @@ dependencies:
     - bioconda::bowtie2
     - bioconda::fastqc
     - bioconda::samtools
+    - bioconda::sra-tools
     - bioconda::subread
     - pip:
         - anndata

@@ -143,15 +143,28 @@ workflow {
          it[1]
       ) }
       .set { barcode_ch }  // sample_id, wl_id, [BCs]
-   csv_ch
-      .map { tuple( 
-         it.sample_id,
-         file( 
-            "${params.fastq_dir}/*${it.fastq_pattern}*",
-             checkIfExists: true 
-         ).sort()
-      ) }
-      .set { reads_ch }  // sample_id, [reads]
+   if ( params.from_sra ) {
+      Channel.of( params.ncbi_api_key ).set { ncbi_api_key }
+      csv_ch
+         .map { tuple( 
+               it.sample_id,
+               it.Run
+            ) }
+         .combine( ncbi_api_key ) 
+         | PULL_FASTQ_FROM_SRA
+      PULL_FASTQ_FROM_SRA.out
+         .set { reads_ch }  // sample_id, reads
+   } else {
+      csv_ch
+         .map { tuple( 
+            it.sample_id,
+            file( 
+               "${params.fastq_dir}/*${it.fastq_pattern}*",
+               checkIfExists: true 
+            ).sort()
+         ) }
+         .set { reads_ch }  // sample_id, [reads]
+   }
    csv_ch
       .map { tuple( 
          it.sample_id,
@@ -190,10 +203,18 @@ workflow {
       .map { it[1..2] }  // wl_id, [BCs]
       .unique()
       | BUILD_WHITELIST  // wl_id, whitelist
-      | ADD_WHITELIST_ERRORS // wl_id, whitelist_err
+   
+   if ( params.allow_cell_errors ) {
+      BUILD_WHITELIST.out |
+       ADD_WHITELIST_ERRORS  // wl_id, whitelist_err
+      ADD_WHITELIST_ERRORS.out
+       .set { whitelist0 }
+   } else {
+      BUILD_WHITELIST.out.set { whitelist0 }
+   }
    barcode_ch
       .map { it[1..0] }  // wl_id, sample_id
-      .combine( ADD_WHITELIST_ERRORS.out, by: 0 )  // wl_id, sample_id, whitelist_err
+      .combine( whitelist0, by: 0 )  // wl_id, sample_id, whitelist_err
       .map { it[1..-1] }  // sample_id, whitelist_err
       .set { whitelists }
 
@@ -281,6 +302,86 @@ process DOWNLOAD_GENOME {
 }
 
 
+// Get FASTQ
+process PULL_FASTQ_FROM_SRA {
+
+   tag "${sample_id}-${sra_run_id}" 
+
+   label 'big_mem'
+   time '24 h'
+
+   input:
+   tuple val( sample_id ), val( sra_run_id ), val( ncbi_api_key )
+
+   output:
+   tuple val( sample_id ), path( "*.with-idx_R?.fastq.gz" )
+
+   script:
+   """
+   NCBI_API_KEY=${ncbi_api_key} \
+   fastq-dump \
+      --read-filter pass \
+      --origfmt --defline-seq '@rd.\$si:\$sg:\$sn' \
+      --split-3 ${sra_run_id}
+
+   for i in \$(seq 1 2)
+   do
+      if [ \$i -eq 1 ]
+      then
+         for f in *_\$i.fastq
+         do
+            awk -F: 'NR%4==1 { a=\$2; alen=length(a); print \$0 } NR%4==2 { print a \$0 } NR%4==3 { print "+" } NR%4==0 { s = sprintf("%*s", alen, ""); print gensub(".", "F", "g", s) \$0 }' \
+               \$f \
+            | gzip -v --best \
+            > \$(basename \$f .fastq).with-idx_R\$i.fastq.gz
+         done
+      else
+         for f in *_\$i.fastq
+         do
+            awk -F: 'NR%4<3 { print \$0 } NR%4==3 { print "+" }' \
+               \$f \
+            | gzip -v --best \
+            > \$(basename \$f .fastq).with-idx_R\$i.fastq.gz
+         done
+      fi
+   done
+   rm *.fastq
+   """
+
+   stub:
+   """
+   NCBI_API_KEY=${ncbi_api_key} \
+   fastq-dump \
+      -X 1000000 \
+      --read-filter pass \
+      --origfmt --defline-seq '@rd.\$si:\$sg:\$sn' \
+      --split-3 ${sra_run_id}
+
+   for i in \$(seq 1 2)
+   do
+      if [ \$i -eq 1 ]
+      then
+         for f in *_\$i.fastq
+         do
+            awk -F: 'NR%4==1 { a=\$2; alen=length(a); print \$0 } NR%4==2 { print a \$0 } NR%4==3 { print "+" } NR%4==0 { s = sprintf("%*s", alen, ""); print gensub(".", "F", "g", s) \$0 }' \
+               \$f \
+            | gzip -v --best \
+            > \$(basename \$f .fastq).with-idx_R\$i.fastq.gz
+         done
+      else
+         for f in *_\$i.fastq
+         do
+            awk -F: 'NR%4<3 { print \$0 } NR%4==3 { print "+" }' \
+               \$f \
+            | gzip -v --best \
+            > \$(basename \$f .fastq).with-idx_R\$i.fastq.gz
+         done
+      fi
+   done
+   """
+}
+
+
 // Do quality control checks
 process FASTQC {
 
@@ -316,9 +417,10 @@ process FASTQC {
 process TRIM_CUTADAPT {
 
    tag "${sample_id}"
+   label "big_mem" 
    
-   errorStrategy 'retry'
-   maxRetries 2
+   // errorStrategy 'retry'
+   // maxRetries 1
 
    publishDir( processed_o, 
                mode: 'copy' )
@@ -332,44 +434,59 @@ process TRIM_CUTADAPT {
    path( "*.log" ), emit: logs
 
    script:
-   def adapter_5prime_R = (adapters5[0].length() > 0 ? "-G '${adapters5[0]}'" : "")
+   def adapter_3prime_R = (adapters3[1].length() > 0 ? "-A '${adapters3[1]}'" : "")
+   def adapter_5prime_R = (adapters5[1].length() > 0 ? "-G '${adapters5[1]}'" : "")
+   def adapter_5prime_F = (adapters5[0].length() > 0 ? "-g '${adapters5[0]}'" : "")
    """
    for i in \$(seq 1 2)
    do
-      zcat */*_R"\$i"*.fastq.gz | gzip --best > ${sample_id}_polyA_R"\$i".fastq.gz
+      cat */*_R"\$i"*.fastq.gz > ${sample_id}_polyA_R"\$i".fastq.gz
    done
 
    cutadapt \
 		-a "A{10}" \
-      -A "T{10}" \
 		-q ${trim_qual} \
 		--nextseq-trim ${trim_qual} \
 		--minimum-length ${min_length} \
 		--report full \
       --action trim \
+      -j ${task.cpus} \
 		-o ${sample_id}_3prime_R1.fastq.gz \
       -p ${sample_id}_3prime_R2.fastq.gz \
 		${sample_id}_polyA_R?.fastq.gz > ${sample_id}.polyA.cutadapt.log
 
    cutadapt \
 		-a "${adapters3[0]}" \
-      -A "${adapters3[1]}" \
+      ${adapter_3prime_R} \
       --minimum-length ${min_length} \
 		--report full \
       --action trim \
+      -j ${task.cpus} \
 		-o ${sample_id}_5prime_R1.fastq.gz \
       -p ${sample_id}_5prime_R2.fastq.gz \
 		${sample_id}_3prime_R?.fastq.gz > ${sample_id}.3prime.cutadapt.log
 
-   cutadapt \
-		-g "${adapters5[1]}" ${adapter_5prime_R} \
-		--report full \
-      --action retain \
-		-o ${sample_id}_R1.with-adapters.fastq.gz \
-      -p ${sample_id}_R2.with-adapters.fastq.gz \
-		${sample_id}_5prime_R?.fastq.gz > ${sample_id}.5prime.cutadapt.log
+   ADAPT5_ALL="${adapter_5prime_F}${adapter_5prime_R}"
+   ADAPT5_LEN=\${#ADAPT5_ALL}
+   if [ \$ADAPT5_LEN -gt 0 ]
+   then
+      cutadapt \
+         ${adapter_5prime_F} ${adapter_5prime_R} \
+         --report full \
+         --action retain \
+         --discard-untrimmed \
+         -j ${task.cpus} \
+         -o ${sample_id}_R1.with-adapters.fastq.gz \
+         -p ${sample_id}_R2.with-adapters.fastq.gz \
+         ${sample_id}_5prime_R?.fastq.gz > ${sample_id}.5prime.cutadapt.log
+   else
+      for i in \$(seq 1 2)
+      do
+         mv ${sample_id}_5prime_R\$i.fastq.gz ${sample_id}_R\$i.with-adapters.fastq.gz
+      done
+   fi
 
-   rm ${sample_id}_polyA_R?.fastq.gz
+   rm ${sample_id}_{3prime,polyA}_R?.fastq.gz
    """
 }
 
@@ -405,6 +522,7 @@ process BUILD_WHITELIST {
 // Build whitelist from provided barcode files
 process ADD_WHITELIST_ERRORS {
    tag "${whitelist_id}"
+   label "big_time"
 
    input:
    tuple val( whitelist_id ), path( whitelist )
@@ -418,22 +536,31 @@ process ADD_WHITELIST_ERRORS {
 
    from itertools import product
 
-   ALPHABET = "ATCG"
+   ALPHABET = "ATCGN"
    INPUT_FILE = "${whitelist}"
    OUTPUT_FILE = "${whitelist_id}.whitelist-err.txt"
 
    with open(OUTPUT_FILE, 'w') as outfile, open(INPUT_FILE, 'r') as infile:
       for line in infile:
-         line = line.strip()
-         alternatives = (
-            f"{line[:i]}{letter}{line[(i+1):]}" 
-            for (i, char), letter in product(
-               enumerate(line), 
-               ALPHABET,
-            ) if char != letter
-         )
-         alternatives = ','.join(sorted(set(alternatives)))
-         print(f"{line}\\t{alternatives}", file=outfile)
+         bc_length = len(line)
+         break
+      infile.seek(0)
+      bc_too_long = (bc_length * (len(ALPHABET) - 1)) > 120
+      if not bc_too_long:
+         for line in infile:
+            line = line.strip()
+            alternatives = (
+               f"{line[:i]}{letter}{line[(i+1):]}" 
+               for (i, char), letter in product(
+                  enumerate(line), 
+                  ALPHABET,
+               ) if char != letter
+            )
+            alternatives = ','.join(sorted(set(alternatives)))
+            print(f"{line}\\t{alternatives}", file=outfile)
+      else:
+         for line in infile:
+            print(line.strip(), file=outfile)
 
    """
 }
@@ -445,9 +572,10 @@ process ADD_WHITELIST_ERRORS {
 process UMITOOLS_EXTRACT {
 
    tag "${sample_id}"
+   label "big_mem"
 
-   errorStrategy 'retry'
-   maxRetries 2
+   // errorStrategy 'retry'
+   // maxRetries 2
 
    publishDir( processed_o, 
                mode: 'copy', 
@@ -461,12 +589,12 @@ process UMITOOLS_EXTRACT {
    path( "*.log" ), emit: logs
 
    script:
+   def error_correct = (params.allow_cell_errors ? "--error-correct-cell" : "")
    """
    umi_tools extract \
 		--bc-pattern "${umis[0]}" \
 		--bc-pattern2 "${umis[1]}" \
-      --extract-method regex \
-      --error-correct-cell \
+      --extract-method regex ${error_correct} \
       --quality-encoding phred33 \
       --whitelist ${whitelist} \
       --log ${sample_id}.extract.log \
@@ -502,9 +630,10 @@ process BOWTIE2_INDEX {
 process BOWTIE2_ALIGN {
 
    tag "${sample_id}-${genome_acc}" 
+   label "big_mem"
 
    errorStrategy 'retry'
-   maxRetries 2
+   maxRetries 1
 
    publishDir( path: processed_o, 
                mode: 'copy' )
@@ -520,12 +649,14 @@ process BOWTIE2_ALIGN {
    """
    bowtie2 \
       -x ${genome_acc} \
-      --rdg 10,10 \
+      --score-min L,0,0.99 \
+      -L 13 -N 1 \
       --very-sensitive-local \
+      -p ${task.cpus} \
       -1 ${reads[0]} -2 ${reads[1]} \
       -S ${sample_id}.mapped.sam \
       2> ${sample_id}.bowtie2.log
-   samtools sort ${sample_id}.mapped.sam \
+   samtools sort -@ ${task.cpus} ${sample_id}.mapped.sam \
       -O bam -l 9 -o ${sample_id}.mapped.bam
    rm ${sample_id}.mapped.sam
    """
@@ -536,7 +667,7 @@ process UMICOLLAPSE {
 
    tag "${sample_id}" 
 
-   label 'big_mem'
+   label 'med_mem'
    // errorStrategy 'retry'
    // maxRetries 2
 
@@ -552,7 +683,7 @@ process UMICOLLAPSE {
    script:
    """
    samtools index ${bamfile}
-   java -jar ${umicollapse_repo}/umicollapse.jar bam -i ${bamfile} -o ${sample_id}.dedup.bam --paired --two-pass 2>&1 > ${sample_id}.umicollapse.log
+   java -jar ${umicollapse_repo}/umicollapse.jar bam -i ${bamfile} -o ${sample_id}.dedup.bam --two-pass 2>&1 > ${sample_id}.umicollapse.log
    """
 }
 
@@ -585,7 +716,6 @@ process FEATURECOUNTS {
    samtools index ${bamfile}
    featureCounts \
       -p -C -s ${params.strand} \
-      -d ${params.min_length} -D 10000  \
       -t ${params.ann_type} -g ${params.label} \
       -a ${gff} \
       -R BAM \
@@ -625,15 +755,15 @@ process UMITOOLS_COUNT {
 		--gene-tag XT \
       --log ${sample_id}.count.log \
 		--stdin ${bamfile.getBaseName()}.sorted.bam \
-      --stdout ${sample_id}.umitools_count.tsv
-   rm ${bamfile.getBaseName()}.sorted.bam
+      --stdout ${sample_id}.umitools_count.tsv \
+   && rm ${bamfile.getBaseName()}.sorted.bam
    """
 }
 
 
 process MAKE_COUNT_MATRIX {
    tag "${sample_id}"
-   label "big_mem"
+   label "med_mem"
 
    publishDir( counts_o, 
                mode: 'copy' )
@@ -673,7 +803,7 @@ process MAKE_COUNT_MATRIX {
 
 process MAKE_ANNDATA {
    tag "${sample_id}"
-   label "big_mem"
+   label "med_mem"
 
    publishDir( counts_o, 
                mode: 'copy' )
@@ -682,15 +812,17 @@ process MAKE_ANNDATA {
    tuple val( sample_id ), path( counts_table )
 
    output:
-   tuple val( sample_id ), path( "*.h5ad" ), path( "*.png" )
+   tuple val( sample_id ), path( "*.h5ad" ), path( "*.png" ), path( "figures/*.png" ), emit: main
+   path "*.log", emit: logs
 
    script:
    """
    #!/usr/bin/env python
 
+   from functools import partial
+
    import anndata as ad
-   from carabiner import print_err
-   from carabiner.mpl import figsaver, grid
+   from carabiner.mpl import add_legend, figsaver, grid
    import pandas as pd
    import numpy as np
    import scanpy as sc
@@ -698,10 +830,15 @@ process MAKE_ANNDATA {
    from scipy.sparse import csr_matrix
    from pandas.api.types import CategoricalDtype
 
+   logfile = open("${sample_id}.scanpy.log", "w")
+   print_err = partial(print, file=logfile)
+
    CELL_ID = "cell_barcode"
    GENE_ID = "gene_id"
-   MIN_GENES_PER_CELL = 20
+   MIN_COUNTS_PER_CELL = 5
    MIN_CELLS_PER_GENE = 1
+   MIN_GENES_TO_KEEP = 1000
+   MIN_CELLS_TO_KEEP = 1000
 
    print_err("Loading ${counts_table} as a sparse matrix...")
    df = pd.read_csv("${counts_table}", sep="\\t", low_memory=False)
@@ -730,83 +867,157 @@ process MAKE_ANNDATA {
    for col in gene_ann_columns:
       adata.var[col.casefold()] = gene_ann_df[col]
 
-   adata.var["ribo"] = (adata.var["gene_biotype"] == "rRNA")
-   adata.var["trna"] = (adata.var["gene_biotype"] == "tRNA")
-   adata.var["ncrna"] = (adata.var["gene_biotype"] == "ncRNA")
+   all_biotypes = adata.var["gene_biotype"].unique()
+   biotype_flags = []
+   for biotype in all_biotypes:
+      this_flag = f"is_{biotype}"
+      biotype_flags.append(this_flag)
+      adata.var[this_flag] = (adata.var["gene_biotype"] == biotype)
    print_err(adata)
 
    print_err("Calculating QC metrics...")
    sc.pp.calculate_qc_metrics(
       adata, 
-      qc_vars=["ribo", "trna", "ncrna"], 
-      inplace=True, 
-      percent_top=[20], 
-      log1p=True,
+      qc_vars=biotype_flags, 
+      inplace=True,
    )
    print_err(adata)
-   print_err(f"Filtering cells with {MIN_GENES_PER_CELL=}...")
+   sc.pp.log1p(
+      adata, 
+   )
+   #print_err(f"Annotating predicted doublets...")
+   #sc.pp.scrublet(
+   #   adata, 
+   #)
+   #print_err(f"Predicted doublet rate is {adata.var['predicted_doublet'].mean()=}!")
+
+   # Want to relax the cutoff with low counts to keep at least 1000 cells
+   max_cutoff = adata.obs.nlargest(
+      MIN_CELLS_TO_KEEP, 
+      'total_counts',
+   )['total_counts'].min()
+   max_cutoff = max(1, min(int(max_cutoff) - 1, MIN_COUNTS_PER_CELL))
+   print_err(f"Filtering cells with {max_cutoff=}...")
    sc.pp.filter_cells(
       adata, 
-      min_genes=MIN_GENES_PER_CELL,
+      min_counts=max_cutoff,
    )
    print_err(adata)
-   print_err(f"Filtering genes with {MIN_CELLS_PER_GENE=}...")
+   # Want to relax the cutoff with low counts to keep at least 1000 genes
+   max_cutoff = adata.var.nlargest(
+      MIN_GENES_TO_KEEP, 
+      'n_cells_by_counts',
+   )['n_cells_by_counts'].min()
+   max_cutoff = max(1, min(int(max_cutoff) - 1, MIN_CELLS_PER_GENE))
+   print_err(f"Filtering genes with {max_cutoff=}...")
    sc.pp.filter_genes(
       adata, 
-      min_cells=MIN_CELLS_PER_GENE,
+      min_cells=max_cutoff,
    )
+   print_err(adata)
+   #print_err(f"Removing rRNA...")
+   #adata = adata[:, ~adata.var["is_rRNA"]]
+   #print_err(adata)
+   #print_err("Normalizing to counts per cell...")
+   #sc.pp.normalize_total(
+   #   adata, 
+   #   exclude_highly_expressed=True,
+   #)
+   print_err(f"Annotating highly variable genes...")
+   sc.pp.highly_variable_genes(
+      adata,
+      flavor='seurat',
+   )
+   adata.var["highly_variable_non_rRNA"] = ((~adata.var["is_rRNA"]) & adata.var["highly_variable"])
+   print_err(f"Found {adata.var['highly_variable_non_rRNA'].sum()=} highly variable genes!")
    print_err(adata)
    print_err("Applying PCA...")
    sc.pp.pca(
       adata, 
+      mask_var="highly_variable_non_rRNA",
    )
    print_err("Getting nearest neighbours...")
    sc.pp.neighbors(
       adata, 
-      n_neighbors=15, 
       metric='cosine',
    )
-   print_err("Carrying out Leiden clustering...")
+   print_err("Carrying out Leiden clustering on cells...")
    sc.tl.leiden(
       adata, 
-      key_added="leiden_res1", 
+      key_added="leiden", 
       resolution=1.,
       flavor='igraph',
       directed=False,
    )
-   print_err(f"Found {adata.obs['leiden_res1'].cat.categories.size=} Leiden clusters!")
+   print_err(f"Found {adata.obs['leiden'].cat.categories.size=} Leiden clusters of cells!")
+   print_err("Finding gene markers per cell cluster...")
+   sc.tl.rank_genes_groups(
+      adata, 
+      "leiden",
+      mask_var="highly_variable_non_rRNA",
+      method="wilcoxon",
+   )
+   print_err("Plotting heatmap of gene markers per cell cluster...")
+   sc.pl.rank_genes_groups_heatmap(
+      adata, 
+      show_gene_labels=True, 
+      save="${sample_id}.cluster-gene-markers.png",
+   )
    print_err("Embedding as UMAP...")
    sc.tl.umap(
       adata, 
+      min_dist=.5,  # umap-learn default = .1
+      spread=1.,
    )
+   
    print_err("Saving as ${sample_id}.h5ad...")
    adata.write("${sample_id}.h5ad", compression="gzip")
 
+   n_genes = adata.n_vars
+   n_cells = adata.n_obs
+
    colors_to_plot = [
       "total_counts", 
-      "pct_counts_ribo", 
-      "pct_counts_trna",
-      "pct_counts_ncrna",
-      "leiden_res1",
-   ]
+      "n_genes_by_counts",
+      "doublet_score",
+      "predicted_doublet",
+      "leiden",
+   ] + [f"pct_counts_{biotype}" for biotype in biotype_flags]
+   colors_to_plot = [c for c in colors_to_plot if c in adata.obs]
+   log_colors = [c for c in colors_to_plot if c.endswith("_counts")]
    print_err("Making UMAP plots...")
-   fig, axes = grid(ncol=len(colors_to_plot), aspect_ratio=1.1)
+   fig, axes = grid(ncol=len(colors_to_plot), aspect_ratio=1., panel_size=3.75)
    for ax, col in zip(axes, colors_to_plot):
       colors = adata.obs[col]
-      if isinstance(colors, pd.Series) and colors.dtype == "category":
-         colors = [f"C{i}" for i in colors.cat.codes]
-      sc = ax.scatter(
-         adata.obsm['X_umap'][:,0],
-         adata.obsm['X_umap'][:,1],
-         c=colors,
-         cmap="cividis",
+      col_is_categorical = (isinstance(colors, pd.Series) and colors.dtype == "category")
+      use_log = (not col_is_categorical and np.any(colors > 0.) and col in log_colors)
+      plotter = partial(
+         ax.scatter,
          s=.5,
          alpha=.7,
-         norm="log" if col == "total_counts" else None,
+         plotnonfinite=True,
       )
-      if isinstance(colors, pd.Series) and colors.dtype != "category":
-         cb = fig.colorbar(sc, ax=ax)
-      ax.set(title=col, xlabel="UMAP_1", ylabel="UMAP_2")
+      if col_is_categorical:
+         for i in np.unique(colors.cat.codes):
+            plotter(
+               *adata[adata.obs[col].cat.codes == i].obsm['X_umap'].T,
+               label=i,
+            )
+         ax.legend(
+            loc='upper center',
+            bbox_to_anchor=(0.5, -0.2),
+            ncol=7,
+
+         )
+      if not col_is_categorical:
+         sc = plotter(
+            *adata.obsm['X_umap'].T,
+            c=colors,
+            cmap="cividis",
+            norm="log" if use_log else None,
+         )
+         fig.colorbar(sc, ax=ax)
+      ax.set(title=f"{n_cells} cells x {n_genes} genes\\n{col}", xlabel="UMAP_1", ylabel="UMAP_2")
    print_err("Saving UMAP plots as ${sample_id}.umap...")
    figsaver()(
       fig=fig,
