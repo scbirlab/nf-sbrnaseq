@@ -28,19 +28,23 @@ if ( params.help ) {
          cell count table.
 
          Usage:
-            nextflow run sbcirlab/nf-sbrnaseq --sample_sheet <csv> --fastq-dir <dir>
+            nextflow run sbcirlab/nf-sbrnaseq --sample_sheet <csv> [--fastq-dir <dir>|--from-sra]
             nextflow run sbcirlab/nf-sbrnaseq -c <config-file>
 
          Required parameters:
-            sample_sheet         Path to a CSV containing sample IDs matched with FASTQ filenames, genome information, and adapter sequences.
-            fastq_dir            Path to directory containing the FASTQ file.
+            sample_sheet               Path to a CSV containing sample IDs matched with FASTQ filenames, genome information, and adapter sequences.
 
-         Optional parameters (with defaults):   
-            trim_qual = 5        For `cutadapt`, the minimum Phred score for trimming 3' calls
-            min_length = "9:38"  For `cutadapt`, the minimum trimmed length of a read. Shorter reads will be discarded
-            strand = 1           For `featureCounts`, the strandedness of RNA-seq. `1` for forward, `2` for reverse.
-            ann_type = 'gene'    For `featureCounts`, features from GFF column 3 to use for counting
-            label = 'Name'       For `featureCounts`, one or more (comma-separated) fields from column 9 of GFF for labeling counts
+         If using local FASTQ data (the default behavior):
+            fastq_dir                  Path to directory containing the FASTQ file.
+          
+         Optional parameters (with defaults):  
+            from_sra = false           Whether to fetch FASTQ data from the SRA.
+            allow_cell_errors = true   Whether to allow 1 error when matching cell barcodes in the whitelist.
+            trim_qual = 5              For `cutadapt`, the minimum Phred score for trimming 3' calls
+            min_length = "9:38"        For `cutadapt`, the minimum trimmed length of a read. Shorter reads will be discarded
+            strand = 1                 For `featureCounts`, the strandedness of RNA-seq. `1` for forward, `2` for reverse.
+            ann_type = 'gene'          For `featureCounts`, features from GFF column 3 to use for counting
+            label = 'Name'             For `featureCounts`, one or more (comma-separated) fields from column 9 of GFF for labeling counts
 
          The parameters can be provided either in the `nextflow.config` file or on the `nextflow run` command.
    

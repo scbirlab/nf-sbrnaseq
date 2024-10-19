@@ -95,10 +95,14 @@ The first time you run the pipeline on your system, the software dependencies in
 The following parameters are required:
 
 - `sample_sheet`: path to a CSV containing sample IDs matched with FASTQ filenames, genome information, and adapter sequences.
+
+If you're using local FASTQ data (the default, `from_sra = false`), you also need to supply the parameter:
 - `fastq_dir`: path to directory containing the FASTQ files
 
 The following parameters have default values can be overridden if necessary.
 
+- `from_sra = false`: whether to fetch FASTQ files from an SRA Run ID instead of loading local files. In this case, your sample sheet needs a column headed `Run` to indicate the Run ID.
+- `allow_cell_errors = true`: Whether to allow 1 error when matching cell barcodes in the whitelist. Otherwise only exact matches are allowed. This is ignored when the total length of the cell barcode is too long.
 - `inputs = "inputs"`: path to directory containing files referenced in the `sample_sheet`, such as lists of guide RNAs.
 - `output = "outputs"`: path to directory to put output files 
 - `trim_qual = 5` : For `cutadapt`, the minimum Phred score for trimming 3' calls
@@ -139,7 +143,14 @@ The file must have a header with the column names below, and one line per sample
 
 - `sample_id`: the unique name of the sample
 - `genome_id`: The [NCBI assembly accession](https://www.ncbi.nlm.nih.gov/datasets/genome/) number for the organism that the guide RNAs are targeting. This number starts with "GCF_" or "GCA_".
+
+If using local files (`from_sra = false`):
 - `fastq_pattern`: the search glob to find FASTQ files for each sample in `fastq_dir`. The pipleine will look for files matching `<fastq_dir>/*<fastq_pattern>*`, and should match only two files, corresponding to paired reads.
+
+If using SRA files (`from_sra = false`):
+- `Run`: the SRA run ID of this sample. When using SRA-derived FASTQ files, the **Illumina indices will be prepended** to the read, so you will have to account for this in your `adapter_read*` columns and `umi_read*` columns
+
+Other required columns:
 - `bc1`, `bc2`, `bc3`: Files containg barcodes corresponding to `<cell_1>`, `<cell_2>`, and `<cell_3>` in `umi_read*` columns.
 - `adapter_read1_3prime`: the 3' adapter on the forward read to trim to in [`cutadapt` format](https://cutadapt.readthedocs.io/en/stable/guide.html#specifying-adapter-sequences). The adapter itself and sequences downstream will be removed.
 - `adapter_read2_3prime`:  the 3' adapter on the reverse read to trim to in [`cutadapt` format](https://cutadapt.readthedocs.io/en/stable/guide.html#specifying-adapter-sequences). The adapter itself and sequences downstream will be removed.
@@ -153,7 +164,7 @@ Here is an example of the sample sheet:
 | sample_id | fastq_pattern | genome_id | bc1 | bc2 | bc3 | adapter_read1_3prime | adapter_read2_3prime | adapter_read1_5prime | adapter_read2_5prime | umi_read1 | umi_read2 |
 | --------- | ------------- | --------- | --- | --- | --- | ------------- | --------- | --------- | --------- | --------- | ------------- |
 | EcoHX1 | G5512A22_R | GCF_904425475.1 | bc1.csv | bc2.csv | bc3.csv | CAGN{6}G{3} | N{7}N{8}TTATTATA | TATAATAAN{8}N{7} | C{3}N{6}CTG | ^(?P<discard_1>.{3})(?P<cell_1>.{6}).* | ^(?P<discard_2>.{8})(?P<cell_2>.{8})(?P<umi_1>.{7}).* |
-| EcoHX2 | G5512A23_R | GCF_904425475.1 | bc1.csv | bc2.csv | bc3.csv | ^(?P<discard_1>.{3})(?P<cell_1>.{6}).* | ^(?P<discard_2>.{8})(?P<cell_2>.{8})(?P<umi_1>.{7}).* |
+| EcoHX2 | G5512A23_R | GCF_904425475.1 | bc1.csv | bc2.csv | bc3.csv | CAGN{6}G{3} | N{7}N{8}TTATTATA | TATAATAAN{8}N{7} | C{3}N{6}CTG | ^(?P<discard_1>.{3})(?P<cell_1>.{6}).* | ^(?P<discard_2>.{8})(?P<cell_2>.{8})(?P<umi_1>.{7}).* |
 
 And here is an example barcode file:
 
