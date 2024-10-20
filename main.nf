@@ -60,8 +60,10 @@ if ( params.help ) {
 if ( !params.sample_sheet ) {
    throw new Exception("!!! PARAMETER MISSING: Please provide a path to sample_sheet")
 }
-if ( !params.fastq_dir ) {
-   throw new Exception("!!! PARAMETER MISSING: Please provide a path to fastq_dir")
+if ( !params.from_sra ) {
+   if ( !params.fastq_dir ) {
+      throw new Exception("!!! PARAMETER MISSING: Please provide a path to fastq_dir")
+   }
 }
 
 working_dir = params.outputs
@@ -839,10 +841,10 @@ process MAKE_ANNDATA {
 
    CELL_ID = "cell_barcode"
    GENE_ID = "gene_id"
-   MIN_COUNTS_PER_CELL = 5
-   MIN_CELLS_PER_GENE = 1
-   MIN_GENES_TO_KEEP = 1000
-   MIN_CELLS_TO_KEEP = 1000
+   MIN_COUNTS_PER_CELL = 60
+   MIN_CELLS_PER_GENE = 3
+   MIN_GENES_TO_KEEP = 600
+   MIN_CELLS_TO_KEEP = 600
 
    print_err("Loading ${counts_table} as a sparse matrix...")
    df = pd.read_csv("${counts_table}", sep="\\t", low_memory=False)
@@ -895,24 +897,36 @@ process MAKE_ANNDATA {
    #)
    #print_err(f"Predicted doublet rate is {adata.var['predicted_doublet'].mean()=}!")
 
+   print_err("Saving as ${sample_id}.h5ad...")
+   adata.write("${sample_id}-unfiltered.h5ad", compression="gzip")
+
    # Want to relax the cutoff with low counts to keep at least 1000 cells
    max_cutoff = adata.obs.nlargest(
       MIN_CELLS_TO_KEEP, 
       'total_counts',
    )['total_counts'].min()
-   max_cutoff = max(1, min(int(max_cutoff) - 1, MIN_COUNTS_PER_CELL))
+   print_err(adata.obs.nlargest(
+      MIN_CELLS_TO_KEEP, 
+      'total_counts',
+   ).sort_values('total_counts')['total_counts'])
+   print_err(f"{max_cutoff=}")
+   max_cutoff = max(1, min(int(max_cutoff), MIN_COUNTS_PER_CELL))
+   print_err(f"{max_cutoff=}")
    print_err(f"Filtering cells with {max_cutoff=}...")
-   sc.pp.filter_cells(
-      adata, 
-      min_counts=max_cutoff,
-   )
+   adata = adata[adata.obs['total_counts'] >= max_cutoff]
+   #sc.pp.filter_cells(
+   #   adata, 
+   #   min_counts=max_cutoff,
+   #)
    print_err(adata)
-   # Want to relax the cutoff with low counts to keep at least 1000 genes
+   # Want to relax the cutoff with low counts to keep at least {MIN_GENES_TO_KEEP} genes
    max_cutoff = adata.var.nlargest(
-      MIN_GENES_TO_KEEP, 
+      MIN_GENES_TO_KEEP + 1, 
       'n_cells_by_counts',
    )['n_cells_by_counts'].min()
+   print_err(f"{max_cutoff=}")
    max_cutoff = max(1, min(int(max_cutoff) - 1, MIN_CELLS_PER_GENE))
+   print_err(f"{max_cutoff=}")
    print_err(f"Filtering genes with {max_cutoff=}...")
    sc.pp.filter_genes(
       adata, 
@@ -961,21 +975,15 @@ process MAKE_ANNDATA {
       mask_var="highly_variable_non_rRNA",
       method="wilcoxon",
    )
-   print_err("Plotting heatmap of gene markers per cell cluster...")
-   sc.pl.rank_genes_groups_heatmap(
-      adata, 
-      show_gene_labels=True, 
-      save="${sample_id}.cluster-gene-markers.png",
-   )
    print_err("Embedding as UMAP...")
    sc.tl.umap(
       adata, 
       min_dist=.5,  # umap-learn default = .1
       spread=1.,
    )
-   
    print_err("Saving as ${sample_id}.h5ad...")
    adata.write("${sample_id}.h5ad", compression="gzip")
+   
 
    n_genes = adata.n_vars
    n_cells = adata.n_obs
@@ -1014,18 +1022,24 @@ process MAKE_ANNDATA {
 
          )
       if not col_is_categorical:
-         sc = plotter(
+         scatter = plotter(
             *adata.obsm['X_umap'].T,
             c=colors,
             cmap="cividis",
             norm="log" if use_log else None,
          )
-         fig.colorbar(sc, ax=ax)
+         fig.colorbar(scatter, ax=ax)
       ax.set(title=f"{n_cells} cells x {n_genes} genes\\n{col}", xlabel="UMAP_1", ylabel="UMAP_2")
    print_err("Saving UMAP plots as ${sample_id}.umap...")
    figsaver()(
       fig=fig,
       name='${sample_id}.umap',
+   )
+   print_err("Plotting heatmap of gene markers per cell cluster...")
+   sc.pl.rank_genes_groups_heatmap(
+      adata, 
+      show_gene_labels=True, 
+      save="${sample_id}.cluster-gene-markers.png",
    )
    print_err("Done!")
    """
