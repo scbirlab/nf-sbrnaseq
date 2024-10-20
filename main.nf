@@ -689,7 +689,7 @@ process UMICOLLAPSE {
    script:
    """
    samtools index ${bamfile}
-   java -jar ${umicollapse_repo}/umicollapse.jar bam -i ${bamfile} -o ${sample_id}.dedup.bam --two-pass 2>&1 > ${sample_id}.umicollapse.log
+   java -jar ${umicollapse_repo}/umicollapse.jar bam -i ${bamfile} -o ${sample_id}.dedup.bam --paired --two-pass 2>&1 > ${sample_id}.umicollapse.log
    """
 }
 
