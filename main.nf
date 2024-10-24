@@ -243,8 +243,8 @@ workflow {
 
    FEATURECOUNTS.out.main
       | UMITOOLS_COUNT   // sample_id, counts
-   UMITOOLS_COUNT.out.main
-      | MAKE_COUNT_MATRIX
+   // UMITOOLS_COUNT.out.main
+   //    | MAKE_COUNT_MATRIX
    UMITOOLS_COUNT.out.main
       .combine( FEATURECOUNTS.out.table, by: 0 )  // sample_id, umitools_counts, featurecounts_counts
       | JOIN_FEATURECOUNTS_UMITOOLS
@@ -579,6 +579,7 @@ process UMITOOLS_EXTRACT {
 
    tag "${sample_id}"
    label "big_mem"
+   time "2d"  // in case of very large whitelists
 
    // errorStrategy 'retry'
    // maxRetries 2
@@ -595,19 +596,30 @@ process UMITOOLS_EXTRACT {
    path( "*.log" ), emit: logs
 
    script:
-   def error_correct = (params.allow_cell_errors ? "--error-correct-cell" : "")
+   def error_correct = ( params.allow_cell_errors ? "--error-correct-cell" : "" )
    """
-   umi_tools extract \
-		--bc-pattern "${umis[0]}" \
-		--bc-pattern2 "${umis[1]}" \
-      --extract-method regex ${error_correct} \
-      --quality-encoding phred33 \
-      --whitelist ${whitelist} \
-      --log ${sample_id}.extract.log \
-		--stdin ${reads[0]} \
-		--read2-in ${reads[1]} \
-		--stdout ${sample_id}_R1.extracted.fastq.gz \
-		--read2-out ${sample_id}_R2.extracted.fastq.gz
+   MAX_SIZE=500000000  # 500 million
+   split -l \$MAX_SIZE "${whitelist}" chunk_
+
+   for f in chunk_*
+   do
+      umi_tools extract \
+         --bc-pattern "${umis[0]}" \
+         --bc-pattern2 "${umis[1]}" \
+         --extract-method regex ${error_correct} \
+         --quality-encoding phred33 \
+         --whitelist "\$f" \
+         --log ${sample_id}.extract.log \
+         --stdin ${reads[0]} \
+         --read2-in ${reads[1]} \
+         --stdout "\$f"_R1.extracted.fastq.gz \
+         --read2-out "\$f"_R2.extracted.fastq.gz
+   done
+
+   for i in \$(seq 1 2)
+   do
+      cat chunk_*_R\$i.extracted.fastq.gz > ${sample_id}_R\$i.extracted.fastq.gz
+   done
    """
 }
 
@@ -655,7 +667,6 @@ process BOWTIE2_ALIGN {
    """
    bowtie2 \
       -x ${genome_acc} \
-      --score-min L,0,0.99 \
       -L 13 -N 1 \
       --very-sensitive-local \
       -p ${task.cpus} \
@@ -828,7 +839,7 @@ process MAKE_ANNDATA {
    from functools import partial
 
    import anndata as ad
-   from carabiner.mpl import add_legend, figsaver, grid
+   from carabiner.mpl import add_legend, figsaver, grid, scattergrid
    import pandas as pd
    import numpy as np
    import scanpy as sc
@@ -843,8 +854,8 @@ process MAKE_ANNDATA {
    GENE_ID = "gene_id"
    MIN_COUNTS_PER_CELL = 60
    MIN_CELLS_PER_GENE = 3
-   MIN_GENES_TO_KEEP = 600
-   MIN_CELLS_TO_KEEP = 600
+   MIN_GENES_TO_KEEP = 200
+   MIN_CELLS_TO_KEEP = 950
 
    print_err("Loading ${counts_table} as a sparse matrix...")
    df = pd.read_csv("${counts_table}", sep="\\t", low_memory=False)
@@ -864,7 +875,7 @@ process MAKE_ANNDATA {
    )
    adata = ad.AnnData(matrix_df)
    print_err(adata)
-   adata.uns["sample_id"] = "${sample_id}"
+   adata.obs["sample_id"] = "${sample_id}"
 
    print_err("Annotating gene features...")
    gene_ann_columns = ["locus_tag", "gene_biotype", "featurecounts_count", "Length"]
@@ -888,6 +899,39 @@ process MAKE_ANNDATA {
       inplace=True,
    )
    print_err(adata)
+   print_err("Calculating tRNA:rRNA ratio...")
+   adata.obs["tRNA_rRNA_ratio"] = (adata.obs["pct_counts_is_tRNA"] + 1) / (adata.obs["pct_counts_is_rRNA"] + 1)
+   fig, axes = scattergrid(
+      adata.obs,
+      grid_columns=["n_genes_by_counts", "total_counts", "pct_counts_is_protein_coding", "pct_counts_is_tRNA", "pct_counts_is_rRNA", "tRNA_rRNA_ratio"],
+      log=["n_genes_by_counts", "total_counts", ],
+      aspect_ratio=1.25,
+   )
+   figsaver()(
+      fig=fig,
+      name='${sample_id}.cell-qc',
+   )
+   #fig, axes = scattergrid(
+   #   adata.var,
+   #   grid_columns=["n_cells_by_counts", "total_counts", "length", "pct_dropout_by_counts",],
+   #   log=["n_cells_by_counts", "total_counts", "length"],
+   #   grouping=["gene_biotype"],
+   #   aspect_ratio=1.25,
+   #)
+   #figsaver()(
+   #   fig=fig,
+   #   name='${sample_id}.gene-qc-biotype',
+   #)
+   fig, axes = scattergrid(
+      adata.var,
+      grid_columns=["n_cells_by_counts", "total_counts", "length", "pct_dropout_by_counts",],
+      log=["n_cells_by_counts", "total_counts", "length"],
+      aspect_ratio=1.25,
+   )
+   figsaver()(
+      fig=fig,
+      name='${sample_id}.gene-qc',
+   )
    sc.pp.log1p(
       adata, 
    )
@@ -946,13 +990,16 @@ process MAKE_ANNDATA {
       adata,
       flavor='seurat',
    )
+   adata.var["not_is_rRNA"] = (~adata.var["is_rRNA"])
    adata.var["highly_variable_non_rRNA"] = ((~adata.var["is_rRNA"]) & adata.var["highly_variable"])
    print_err(f"Found {adata.var['highly_variable_non_rRNA'].sum()=} highly variable genes!")
    print_err(adata)
+   use_highly_variable = (adata.var['highly_variable_non_rRNA'].sum() >= 3)
+
    print_err("Applying PCA...")
    sc.pp.pca(
       adata, 
-      mask_var="highly_variable_non_rRNA",
+      mask_var="highly_variable_non_rRNA" if use_highly_variable else "not_is_rRNA",
    )
    print_err("Getting nearest neighbours...")
    sc.pp.neighbors(
@@ -972,8 +1019,8 @@ process MAKE_ANNDATA {
    sc.tl.rank_genes_groups(
       adata, 
       "leiden",
-      mask_var="highly_variable_non_rRNA",
-      method="wilcoxon",
+      mask_var="highly_variable_non_rRNA" if use_highly_variable else "not_is_rRNA",
+      method="logreg",
    )
    print_err("Embedding as UMAP...")
    sc.tl.umap(
@@ -983,7 +1030,6 @@ process MAKE_ANNDATA {
    )
    print_err("Saving as ${sample_id}.h5ad...")
    adata.write("${sample_id}.h5ad", compression="gzip")
-   
 
    n_genes = adata.n_vars
    n_cells = adata.n_obs
@@ -994,9 +1040,10 @@ process MAKE_ANNDATA {
       "doublet_score",
       "predicted_doublet",
       "leiden",
+      "tRNA_rRNA_ratio",
    ] + [f"pct_counts_{biotype}" for biotype in biotype_flags]
    colors_to_plot = [c for c in colors_to_plot if c in adata.obs]
-   log_colors = [c for c in colors_to_plot if c.endswith("_counts")]
+   log_colors = [c for c in colors_to_plot if c.endswith("_counts")] + ["tRNA_rRNA_ratio",]
    print_err("Making UMAP plots...")
    fig, axes = grid(ncol=len(colors_to_plot), aspect_ratio=1., panel_size=3.75)
    for ax, col in zip(axes, colors_to_plot):
