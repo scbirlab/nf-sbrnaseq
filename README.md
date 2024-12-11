@@ -17,7 +17,7 @@ For each sample:
 
 1. Trim reads to adapters using `cutadapt`. Reads from sbRNA-seq will be flanked by sequences containing cell barcodes and UMIs, so this step trims any extra sequences either side of these flanking sequences.
 2. Extract cell barcodes and UMIs using `umi-tools`.
-3. Map to genome FASTA using `bowtie2`.
+3. Map to genome FASTA using `STAR` (`bowtie2` is available as an alternative).
 4. Deduplicate mapped reads using `umitools`.
 5. Count deduplicated reads per gene using `featureCounts`.
 6. Count deduplicated reads per gene per cell using `umi-tools`.
@@ -81,7 +81,7 @@ Each time you run the pipeline after the first time, Nextflow will use a locally
 the pipeline, use the `-r <version>` flag. For example,
 
 ```bash 
-nextflow run scbirlab/nf-sbrnaseq -r v0.0.4
+nextflow run scbirlab/nf-sbrnaseq -r v0.0.5
 ```
 
 A list of versions can be found by running `nextflow info scbirlab/nf-sbrnaseq`.
@@ -105,6 +105,7 @@ The following parameters have default values can be overridden if necessary.
 - `allow_cell_errors = true`: Whether to allow 1 error when matching cell barcodes in the whitelist. Otherwise only exact matches are allowed. This is ignored when the total length of the cell barcode is too long.
 - `inputs = "inputs"`: path to directory containing files referenced in the `sample_sheet`, such as lists of guide RNAs.
 - `output = "outputs"`: path to directory to put output files 
+- `use_star = true`: use `STAR` for aligning reads. Otherwise, the pipeline will use `bowtie2`. 
 - `trim_qual = 5` : For `cutadapt`, the minimum Phred score for trimming 3' calls
 - `min_length = "9:38"` : For `cutadapt`, the minimum trimmed length of a read. Shorter reads will be discarded
 - `strand = 1` : For `featureCounts`, the strandedness of RNA-seq. `1` for forward, `2` for reverse.
@@ -197,5 +198,6 @@ Here are the help pages of the software used by this pipeline.
 - [cutadapt](https://cutadapt.readthedocs.io/en/stable/index.html)
 - [umitools](https://umi-tools.readthedocs.io/en/latest/index.html)
 - [featureCounts](https://subread.sourceforge.net/featureCounts.html)
+- [STAR](https://github.com/alexdobin/STAR/blob/master/doc/STARmanual.pdf)
 - [bowtie2](https://bowtie-bio.sourceforge.net/bowtie2/manual.shtml)
 - [samtools](http://www.htslib.org/doc/samtools.html)
