@@ -182,12 +182,19 @@ workflow {
       .map { it[1] }  // genome_acc
       .unique()
       | DOWNLOAD_GENOME   // genome_acc, genome, gff
-   DOWNLOAD_GENOME.out
-      .map { it[0..1] }  // genome_acc, genome
-      | BOWTIE2_INDEX   // genome_acc, [genome_idx]
+   if ( ! params.use_star ) {
+      DOWNLOAD_GENOME.out
+         .map { it[0..1] }  // genome_acc, genome
+         | BOWTIE2_INDEX   // genome_acc, [genome_idx]
+      BOWTIE2_INDEX.out.set { genome_idx0 }
+   } else {
+      DOWNLOAD_GENOME.out
+         | STAR_INDEX   // genome_acc, [genome_idx]
+      STAR_INDEX.out.set { genome_idx0 }
+   }
    genome_ch
       .map { it[1..0] }  // genome_acc, sample_id
-      .combine( BOWTIE2_INDEX.out, by: 0 )  // genome_acc, sample_id, [genome_idx]
+      .combine( genome_idx0, by: 0 )  // genome_acc, sample_id, [genome_idx]
       .map { it[1..-1] + [ it[0] ] }  // sample_id, [genome_idx], genome_acc
       .set { genome_idx }
    genome_ch
@@ -231,9 +238,10 @@ workflow {
 
    UMITOOLS_EXTRACT.out.main
       .combine( genome_idx, by: 0 )  // sample_id, [reads], [genome_idx], genome_acc
-      | BOWTIE2_ALIGN  // sample_id, [bam_bai]
+      | ( params.use_star ? STAR_ALIGN : BOWTIE2_ALIGN ) // sample_id, [bam_bai]
+      | set { mapped_reads }
 
-   BOWTIE2_ALIGN.out.main
+   mapped_reads.main
       .combine( DOWNLOAD_UMICOLLAPSE.out )  // sample_id, [bam_bai], umicollapse_repo
       | UMICOLLAPSE  // sample_id, dedup_bam
 
@@ -243,8 +251,8 @@ workflow {
 
    FEATURECOUNTS.out.main
       | UMITOOLS_COUNT   // sample_id, counts
-   UMITOOLS_COUNT.out.main
-      | MAKE_COUNT_MATRIX
+   // UMITOOLS_COUNT.out.main
+   //    | MAKE_COUNT_MATRIX
    UMITOOLS_COUNT.out.main
       .combine( FEATURECOUNTS.out.table, by: 0 )  // sample_id, umitools_counts, featurecounts_counts
       | JOIN_FEATURECOUNTS_UMITOOLS
@@ -261,7 +269,7 @@ workflow {
    TRIM_CUTADAPT.out.logs
       .concat(
          FASTQC.out.multiqc_logs,
-         BOWTIE2_ALIGN.out.logs,
+         mapped_reads.logs,
          FEATURECOUNTS.out.logs 
       )
       .flatten()
@@ -579,6 +587,7 @@ process UMITOOLS_EXTRACT {
 
    tag "${sample_id}"
    label "big_mem"
+   time "2d"  // in case of very large whitelists
 
    // errorStrategy 'retry'
    // maxRetries 2
@@ -591,23 +600,34 @@ process UMITOOLS_EXTRACT {
    tuple val( sample_id ), path( reads ), val( umis ), path( whitelist )
 
    output:
-   tuple val( sample_id ), path( "*.gz" ), emit: main
-   path( "*.log" ), emit: logs
+   tuple val( sample_id ), path( "*.extracted.fastq.gz" ), emit: main
+   path "*.log", emit: logs
 
    script:
-   def error_correct = (params.allow_cell_errors ? "--error-correct-cell" : "")
+   def error_correct = ( params.allow_cell_errors ? "--error-correct-cell" : "" )
    """
-   umi_tools extract \
-		--bc-pattern "${umis[0]}" \
-		--bc-pattern2 "${umis[1]}" \
-      --extract-method regex ${error_correct} \
-      --quality-encoding phred33 \
-      --whitelist ${whitelist} \
-      --log ${sample_id}.extract.log \
-		--stdin ${reads[0]} \
-		--read2-in ${reads[1]} \
-		--stdout ${sample_id}_R1.extracted.fastq.gz \
-		--read2-out ${sample_id}_R2.extracted.fastq.gz
+   MAX_SIZE=500000000  # 500 million
+   split -l \$MAX_SIZE "${whitelist}" chunk_
+
+   for f in chunk_*
+   do
+      umi_tools extract \
+         --bc-pattern "${umis[0]}" \
+         --bc-pattern2 "${umis[1]}" \
+         --extract-method regex ${error_correct} \
+         --quality-encoding phred33 \
+         --whitelist "\$f" \
+         --log ${sample_id}.extract.log \
+         --stdin ${reads[0]} \
+         --read2-in ${reads[1]} \
+         --stdout "\$f"_R1.fastq.gz \
+         --read2-out "\$f"_R2.fastq.gz
+   done
+
+   for i in \$(seq 1 2)
+   do
+      cat chunk_*_R\$i.fastq.gz > ${sample_id}_R\$i.extracted.fastq.gz
+   done
    """
 }
 
@@ -655,7 +675,6 @@ process BOWTIE2_ALIGN {
    """
    bowtie2 \
       -x ${genome_acc} \
-      --score-min L,0,0.99 \
       -L 13 -N 1 \
       --very-sensitive-local \
       -p ${task.cpus} \
@@ -665,6 +684,92 @@ process BOWTIE2_ALIGN {
    samtools sort -@ ${task.cpus} ${sample_id}.mapped.sam \
       -O bam -l 9 -o ${sample_id}.mapped.bam
    rm ${sample_id}.mapped.sam
+   """
+}
+
+
+/*
+ * Index the reference genome for use by STAR.
+ */
+process STAR_INDEX {
+
+   tag "${genome_id}"
+   
+   input:
+   tuple val( genome_id ), path( fasta ), path( gff )
+
+   output:
+   tuple val( genome_id ), path( "star-index" )
+
+   script:
+   """
+   mkdir star-index
+   STAR \
+      --runMode genomeGenerate \
+      --runThreadN ${task.cpus} \
+      --genomeDir star-index \
+      --genomeFastaFiles ${fasta} \
+      --sjdbOverhang 100 \
+      --sjdbGTFfile ${gff} \
+      --sjdbGTFfeatureExon CDS \
+      --sjdbGTFtagExonParentTranscript Parent \
+      --sjdbGTFtagExonParentGene Parent \
+      --sjdbGTFtagExonParentGeneName gene \
+      --sjdbGTFtagExonParentGeneType gene_biotype
+   """
+}
+
+/*
+ * Align reads to reference genome & create BAM file.
+ */
+process STAR_ALIGN {
+
+   tag "${sample_id}-${genome_acc}" 
+   label "big_mem"
+   time "2d"
+
+   // errorStrategy 'retry'
+   // maxRetries 1
+
+   publishDir( path: processed_o, 
+               mode: 'copy' )
+
+   input:
+   tuple val( sample_id ), path( reads ), path( idx ), val( genome_acc )
+
+   output:
+   tuple val( sample_id ), path( "*.bam" ), emit: main
+   path "*.log", emit: logs
+
+   script:
+   """
+   # make sure no 0-length reads
+   for f in ${reads}
+   do
+      zcat \$f \
+      | awk 'NR%4 == 1 { name = \$0 } NR%4 == 2 { if (length(\$0) > 0) { seq = \$0 } else { seq = "N" } } NR%4 == 0 { if (length(\$0) > 0) { qual = \$0 } else { qual = "?" } } ( NR > 1 && NR%4 == 1 ) { print name; print seq; print "+"; print qual } END { print name; print seq; print "+"; print qual }' \
+      | gzip --best \
+      > \$(basename \$f .fastq.gz).padded.fastq.gz
+   done
+
+   STAR \
+      --runThreadN ${task.cpus} \
+      --genomeDir ${idx} \
+      --readFilesIn *_R1*.padded.fastq.gz *_R2*.padded.fastq.gz \
+      --readFilesCommand zcat \
+      --alignEndsType Extend5pOfRead1 \
+      --alignIntronMax 1 \
+      --outFilterMultimapNmax 1 \
+      --outFilterMismatchNmax 50 \
+      --outFilterScoreMinOverLread 0 --outFilterMatchNminOverLread 0 --outFilterMatchNmin 0 \
+      --twopassMode Basic \
+      --quantMode GeneCounts \
+      --outSAMtype BAM SortedByCoordinate \
+      --limitBAMsortRAM ${task.memory.getBytes()} \
+      --outBAMsortingThreadN ${task.cpus}
+   mv Log.final.out ${sample_id}.star.log
+   mv Aligned.sortedByCoord.out.bam ${sample_id}.mapped.bam
+   rm *.padded.fastq.gz
    """
 }
 
@@ -689,7 +794,8 @@ process UMICOLLAPSE {
    script:
    """
    samtools index ${bamfile}
-   java -jar ${umicollapse_repo}/umicollapse.jar bam -i ${bamfile} -o ${sample_id}.dedup.bam --paired --two-pass 2>&1 > ${sample_id}.umicollapse.log
+   java -jar -Xmx${task.memory.getMega()}m -Xss1024m ${umicollapse_repo}/umicollapse.jar bam \
+      -i ${bamfile} -o ${sample_id}.dedup.bam --paired --two-pass 2>&1 > ${sample_id}.umicollapse.log
    """
 }
 
@@ -828,7 +934,7 @@ process MAKE_ANNDATA {
    from functools import partial
 
    import anndata as ad
-   from carabiner.mpl import add_legend, figsaver, grid
+   from carabiner.mpl import add_legend, figsaver, grid, scattergrid
    import pandas as pd
    import numpy as np
    import scanpy as sc
@@ -843,8 +949,8 @@ process MAKE_ANNDATA {
    GENE_ID = "gene_id"
    MIN_COUNTS_PER_CELL = 60
    MIN_CELLS_PER_GENE = 3
-   MIN_GENES_TO_KEEP = 600
-   MIN_CELLS_TO_KEEP = 600
+   MIN_GENES_TO_KEEP = 200
+   MIN_CELLS_TO_KEEP = 950
 
    print_err("Loading ${counts_table} as a sparse matrix...")
    df = pd.read_csv("${counts_table}", sep="\\t", low_memory=False)
@@ -864,7 +970,7 @@ process MAKE_ANNDATA {
    )
    adata = ad.AnnData(matrix_df)
    print_err(adata)
-   adata.uns["sample_id"] = "${sample_id}"
+   adata.obs["sample_id"] = "${sample_id}"
 
    print_err("Annotating gene features...")
    gene_ann_columns = ["locus_tag", "gene_biotype", "featurecounts_count", "Length"]
@@ -888,6 +994,39 @@ process MAKE_ANNDATA {
       inplace=True,
    )
    print_err(adata)
+   print_err("Calculating tRNA:rRNA ratio...")
+   adata.obs["tRNA_rRNA_ratio"] = (adata.obs["pct_counts_is_tRNA"] + 1) / (adata.obs["pct_counts_is_rRNA"] + 1)
+   fig, axes = scattergrid(
+      adata.obs,
+      grid_columns=["n_genes_by_counts", "total_counts", "pct_counts_is_protein_coding", "pct_counts_is_tRNA", "pct_counts_is_rRNA", "tRNA_rRNA_ratio"],
+      log=["n_genes_by_counts", "total_counts", ],
+      aspect_ratio=1.25,
+   )
+   figsaver()(
+      fig=fig,
+      name='${sample_id}.cell-qc',
+   )
+   #fig, axes = scattergrid(
+   #   adata.var,
+   #   grid_columns=["n_cells_by_counts", "total_counts", "length", "pct_dropout_by_counts",],
+   #   log=["n_cells_by_counts", "total_counts", "length"],
+   #   grouping=["gene_biotype"],
+   #   aspect_ratio=1.25,
+   #)
+   #figsaver()(
+   #   fig=fig,
+   #   name='${sample_id}.gene-qc-biotype',
+   #)
+   fig, axes = scattergrid(
+      adata.var,
+      grid_columns=["n_cells_by_counts", "total_counts", "length", "pct_dropout_by_counts",],
+      log=["n_cells_by_counts", "total_counts", "length"],
+      aspect_ratio=1.25,
+   )
+   figsaver()(
+      fig=fig,
+      name='${sample_id}.gene-qc',
+   )
    sc.pp.log1p(
       adata, 
    )
@@ -936,23 +1075,26 @@ process MAKE_ANNDATA {
    #print_err(f"Removing rRNA...")
    #adata = adata[:, ~adata.var["is_rRNA"]]
    #print_err(adata)
-   #print_err("Normalizing to counts per cell...")
-   #sc.pp.normalize_total(
-   #   adata, 
-   #   exclude_highly_expressed=True,
-   #)
+   print_err("Normalizing to counts per cell...")
+   sc.pp.normalize_total(
+      adata, 
+      exclude_highly_expressed=True,
+   )
    print_err(f"Annotating highly variable genes...")
    sc.pp.highly_variable_genes(
       adata,
       flavor='seurat',
    )
+   adata.var["not_is_rRNA"] = (~adata.var["is_rRNA"])
    adata.var["highly_variable_non_rRNA"] = ((~adata.var["is_rRNA"]) & adata.var["highly_variable"])
    print_err(f"Found {adata.var['highly_variable_non_rRNA'].sum()=} highly variable genes!")
    print_err(adata)
+   use_highly_variable = (adata.var['highly_variable_non_rRNA'].sum() >= 3)
+
    print_err("Applying PCA...")
    sc.pp.pca(
       adata, 
-      mask_var="highly_variable_non_rRNA",
+      mask_var="highly_variable_non_rRNA" if use_highly_variable else "not_is_rRNA",
    )
    print_err("Getting nearest neighbours...")
    sc.pp.neighbors(
@@ -972,8 +1114,8 @@ process MAKE_ANNDATA {
    sc.tl.rank_genes_groups(
       adata, 
       "leiden",
-      mask_var="highly_variable_non_rRNA",
-      method="wilcoxon",
+      mask_var="highly_variable_non_rRNA" if use_highly_variable else "not_is_rRNA",
+      method="logreg",
    )
    print_err("Embedding as UMAP...")
    sc.tl.umap(
@@ -983,7 +1125,6 @@ process MAKE_ANNDATA {
    )
    print_err("Saving as ${sample_id}.h5ad...")
    adata.write("${sample_id}.h5ad", compression="gzip")
-   
 
    n_genes = adata.n_vars
    n_cells = adata.n_obs
@@ -994,9 +1135,10 @@ process MAKE_ANNDATA {
       "doublet_score",
       "predicted_doublet",
       "leiden",
+      "tRNA_rRNA_ratio",
    ] + [f"pct_counts_{biotype}" for biotype in biotype_flags]
    colors_to_plot = [c for c in colors_to_plot if c in adata.obs]
-   log_colors = [c for c in colors_to_plot if c.endswith("_counts")]
+   log_colors = [c for c in colors_to_plot if c.endswith("_counts")] + ["tRNA_rRNA_ratio",]
    print_err("Making UMAP plots...")
    fig, axes = grid(ncol=len(colors_to_plot), aspect_ratio=1., panel_size=3.75)
    for ax, col in zip(axes, colors_to_plot):
@@ -1029,17 +1171,26 @@ process MAKE_ANNDATA {
             norm="log" if use_log else None,
          )
          fig.colorbar(scatter, ax=ax)
-      ax.set(title=f"{n_cells} cells x {n_genes} genes\\n{col}", xlabel="UMAP_1", ylabel="UMAP_2")
+      ax.set(
+         title=f"{n_cells} cells x {n_genes} genes\\n{col}", 
+         xlabel="UMAP_1", 
+         ylabel="UMAP_2",
+      )
    print_err("Saving UMAP plots as ${sample_id}.umap...")
-   figsaver()(
+   figsaver(format="pdf")(
       fig=fig,
       name='${sample_id}.umap',
+   )
+   print_err("Plotting heatmap of mean gene markers per cell cluster...")
+   sc.pl.rank_genes_groups_matrixplot(
+      adata,
+      save="${sample_id}.cluster-gene-markers-mean.pdf",
    )
    print_err("Plotting heatmap of gene markers per cell cluster...")
    sc.pl.rank_genes_groups_heatmap(
       adata, 
       show_gene_labels=True, 
-      save="${sample_id}.cluster-gene-markers.png",
+      save="${sample_id}.cluster-gene-markers.pdf",
    )
    print_err("Done!")
    """
@@ -1130,7 +1281,7 @@ process PLOT_UMI_DISTRIBUTIONS {
    )
    for ax in fig.axes:
       ax.set(yscale="log")
-   figsaver()(
+   figsaver(format="pdf")(
       fig=fig,
       name='${sample_id}.umi-hist',
    )
@@ -1169,7 +1320,7 @@ process PLOT_CELLS_PER_GENE_DISTRIBUTION {
       grid_columns=["umi_count", "cell_count"],
       log=["umi_count", "cell_count"],
    )
-   figsaver()(
+   figsaver(format="pdf")(
       fig=fig,
       name='${sample_id}.umis-and-cells-per-gene',
    )
@@ -1213,7 +1364,7 @@ process PLOT_GENES_PER_CELL_DISTRIBUTION {
       )
       for ax in fig.axes:
          ax.set(yscale="log")
-      figsaver()(
+      figsaver(format="pdf")(
          fig=fig,
          name=f.split(".tsv")[0],
       )
