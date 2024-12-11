@@ -182,12 +182,19 @@ workflow {
       .map { it[1] }  // genome_acc
       .unique()
       | DOWNLOAD_GENOME   // genome_acc, genome, gff
-   DOWNLOAD_GENOME.out
-      .map { it[0..1] }  // genome_acc, genome
-      | BOWTIE2_INDEX   // genome_acc, [genome_idx]
+   if ( ! params.use_star ) {
+      DOWNLOAD_GENOME.out
+         .map { it[0..1] }  // genome_acc, genome
+         | BOWTIE2_INDEX   // genome_acc, [genome_idx]
+      BOWTIE2_INDEX.out.set { genome_idx0 }
+   } else {
+      DOWNLOAD_GENOME.out
+         | STAR_INDEX   // genome_acc, [genome_idx]
+      STAR_INDEX.out.set { genome_idx0 }
+   }
    genome_ch
       .map { it[1..0] }  // genome_acc, sample_id
-      .combine( BOWTIE2_INDEX.out, by: 0 )  // genome_acc, sample_id, [genome_idx]
+      .combine( genome_idx0, by: 0 )  // genome_acc, sample_id, [genome_idx]
       .map { it[1..-1] + [ it[0] ] }  // sample_id, [genome_idx], genome_acc
       .set { genome_idx }
    genome_ch
@@ -231,9 +238,10 @@ workflow {
 
    UMITOOLS_EXTRACT.out.main
       .combine( genome_idx, by: 0 )  // sample_id, [reads], [genome_idx], genome_acc
-      | BOWTIE2_ALIGN  // sample_id, [bam_bai]
+      | ( params.use_star ? STAR_ALIGN : BOWTIE2_ALIGN ) // sample_id, [bam_bai]
+      | set { mapped_reads }
 
-   BOWTIE2_ALIGN.out.main
+   mapped_reads.main
       .combine( DOWNLOAD_UMICOLLAPSE.out )  // sample_id, [bam_bai], umicollapse_repo
       | UMICOLLAPSE  // sample_id, dedup_bam
 
@@ -261,7 +269,7 @@ workflow {
    TRIM_CUTADAPT.out.logs
       .concat(
          FASTQC.out.multiqc_logs,
-         BOWTIE2_ALIGN.out.logs,
+         mapped_reads.logs,
          FEATURECOUNTS.out.logs 
       )
       .flatten()
@@ -592,8 +600,8 @@ process UMITOOLS_EXTRACT {
    tuple val( sample_id ), path( reads ), val( umis ), path( whitelist )
 
    output:
-   tuple val( sample_id ), path( "*.gz" ), emit: main
-   path( "*.log" ), emit: logs
+   tuple val( sample_id ), path( "*.extracted.fastq.gz" ), emit: main
+   path "*.log", emit: logs
 
    script:
    def error_correct = ( params.allow_cell_errors ? "--error-correct-cell" : "" )
@@ -612,13 +620,13 @@ process UMITOOLS_EXTRACT {
          --log ${sample_id}.extract.log \
          --stdin ${reads[0]} \
          --read2-in ${reads[1]} \
-         --stdout "\$f"_R1.extracted.fastq.gz \
-         --read2-out "\$f"_R2.extracted.fastq.gz
+         --stdout "\$f"_R1.fastq.gz \
+         --read2-out "\$f"_R2.fastq.gz
    done
 
    for i in \$(seq 1 2)
    do
-      cat chunk_*_R\$i.extracted.fastq.gz > ${sample_id}_R\$i.extracted.fastq.gz
+      cat chunk_*_R\$i.fastq.gz > ${sample_id}_R\$i.extracted.fastq.gz
    done
    """
 }
@@ -680,6 +688,92 @@ process BOWTIE2_ALIGN {
 }
 
 
+/*
+ * Index the reference genome for use by STAR.
+ */
+process STAR_INDEX {
+
+   tag "${genome_id}"
+   
+   input:
+   tuple val( genome_id ), path( fasta ), path( gff )
+
+   output:
+   tuple val( genome_id ), path( "star-index" )
+
+   script:
+   """
+   mkdir star-index
+   STAR \
+      --runMode genomeGenerate \
+      --runThreadN ${task.cpus} \
+      --genomeDir star-index \
+      --genomeFastaFiles ${fasta} \
+      --sjdbOverhang 100 \
+      --sjdbGTFfile ${gff} \
+      --sjdbGTFfeatureExon CDS \
+      --sjdbGTFtagExonParentTranscript Parent \
+      --sjdbGTFtagExonParentGene Parent \
+      --sjdbGTFtagExonParentGeneName gene \
+      --sjdbGTFtagExonParentGeneType gene_biotype
+   """
+}
+
+/*
+ * Align reads to reference genome & create BAM file.
+ */
+process STAR_ALIGN {
+
+   tag "${sample_id}-${genome_acc}" 
+   label "big_mem"
+   time "2d"
+
+   // errorStrategy 'retry'
+   // maxRetries 1
+
+   publishDir( path: processed_o, 
+               mode: 'copy' )
+
+   input:
+   tuple val( sample_id ), path( reads ), path( idx ), val( genome_acc )
+
+   output:
+   tuple val( sample_id ), path( "*.bam" ), emit: main
+   path "*.log", emit: logs
+
+   script:
+   """
+   # make sure no 0-length reads
+   for f in ${reads}
+   do
+      zcat \$f \
+      | awk 'NR%4 == 1 { name = \$0 } NR%4 == 2 { if (length(\$0) > 0) { seq = \$0 } else { seq = "N" } } NR%4 == 0 { if (length(\$0) > 0) { qual = \$0 } else { qual = "?" } } ( NR > 1 && NR%4 == 1 ) { print name; print seq; print "+"; print qual } END { print name; print seq; print "+"; print qual }' \
+      | gzip --best \
+      > \$(basename \$f .fastq.gz).padded.fastq.gz
+   done
+
+   STAR \
+      --runThreadN ${task.cpus} \
+      --genomeDir ${idx} \
+      --readFilesIn *_R1*.padded.fastq.gz *_R2*.padded.fastq.gz \
+      --readFilesCommand zcat \
+      --alignEndsType Extend5pOfRead1 \
+      --alignIntronMax 1 \
+      --outFilterMultimapNmax 1 \
+      --outFilterMismatchNmax 50 \
+      --outFilterScoreMinOverLread 0 --outFilterMatchNminOverLread 0 --outFilterMatchNmin 0 \
+      --twopassMode Basic \
+      --quantMode GeneCounts \
+      --outSAMtype BAM SortedByCoordinate \
+      --limitBAMsortRAM ${task.memory.getBytes()} \
+      --outBAMsortingThreadN ${task.cpus}
+   mv Log.final.out ${sample_id}.star.log
+   mv Aligned.sortedByCoord.out.bam ${sample_id}.mapped.bam
+   rm *.padded.fastq.gz
+   """
+}
+
+
 process UMICOLLAPSE {
 
    tag "${sample_id}" 
@@ -700,7 +794,8 @@ process UMICOLLAPSE {
    script:
    """
    samtools index ${bamfile}
-   java -jar ${umicollapse_repo}/umicollapse.jar bam -i ${bamfile} -o ${sample_id}.dedup.bam --paired --two-pass 2>&1 > ${sample_id}.umicollapse.log
+   java -jar -Xmx${task.memory.getMega()}m -Xss1024m ${umicollapse_repo}/umicollapse.jar bam \
+      -i ${bamfile} -o ${sample_id}.dedup.bam --paired --two-pass 2>&1 > ${sample_id}.umicollapse.log
    """
 }
 
@@ -980,11 +1075,11 @@ process MAKE_ANNDATA {
    #print_err(f"Removing rRNA...")
    #adata = adata[:, ~adata.var["is_rRNA"]]
    #print_err(adata)
-   #print_err("Normalizing to counts per cell...")
-   #sc.pp.normalize_total(
-   #   adata, 
-   #   exclude_highly_expressed=True,
-   #)
+   print_err("Normalizing to counts per cell...")
+   sc.pp.normalize_total(
+      adata, 
+      exclude_highly_expressed=True,
+   )
    print_err(f"Annotating highly variable genes...")
    sc.pp.highly_variable_genes(
       adata,
@@ -1076,17 +1171,26 @@ process MAKE_ANNDATA {
             norm="log" if use_log else None,
          )
          fig.colorbar(scatter, ax=ax)
-      ax.set(title=f"{n_cells} cells x {n_genes} genes\\n{col}", xlabel="UMAP_1", ylabel="UMAP_2")
+      ax.set(
+         title=f"{n_cells} cells x {n_genes} genes\\n{col}", 
+         xlabel="UMAP_1", 
+         ylabel="UMAP_2",
+      )
    print_err("Saving UMAP plots as ${sample_id}.umap...")
-   figsaver()(
+   figsaver(format="pdf")(
       fig=fig,
       name='${sample_id}.umap',
+   )
+   print_err("Plotting heatmap of mean gene markers per cell cluster...")
+   sc.pl.rank_genes_groups_matrixplot(
+      adata,
+      save="${sample_id}.cluster-gene-markers-mean.pdf",
    )
    print_err("Plotting heatmap of gene markers per cell cluster...")
    sc.pl.rank_genes_groups_heatmap(
       adata, 
       show_gene_labels=True, 
-      save="${sample_id}.cluster-gene-markers.png",
+      save="${sample_id}.cluster-gene-markers.pdf",
    )
    print_err("Done!")
    """
@@ -1177,7 +1281,7 @@ process PLOT_UMI_DISTRIBUTIONS {
    )
    for ax in fig.axes:
       ax.set(yscale="log")
-   figsaver()(
+   figsaver(format="pdf")(
       fig=fig,
       name='${sample_id}.umi-hist',
    )
@@ -1216,7 +1320,7 @@ process PLOT_CELLS_PER_GENE_DISTRIBUTION {
       grid_columns=["umi_count", "cell_count"],
       log=["umi_count", "cell_count"],
    )
-   figsaver()(
+   figsaver(format="pdf")(
       fig=fig,
       name='${sample_id}.umis-and-cells-per-gene',
    )
@@ -1260,7 +1364,7 @@ process PLOT_GENES_PER_CELL_DISTRIBUTION {
       )
       for ax in fig.axes:
          ax.set(yscale="log")
-      figsaver()(
+      figsaver(format="pdf")(
          fig=fig,
          name=f.split(".tsv")[0],
       )
