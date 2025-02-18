@@ -306,12 +306,25 @@ process DOWNLOAD_GENOME {
    val accession
 
    output:
-   tuple val( accession ), path( "ncbi_dataset/data/*/${accession}_*_genomic.fna" ), path( "ncbi_dataset/data/*/*.gff" )
+   tuple val( accession ), path( "all-nucleotides.fna" ), path( "all-annotations.gff" )
 
    script:
    """
-   wget "https://api.ncbi.nlm.nih.gov/datasets/v2alpha/genome/accession/${accession}/download?include_annotation_type=GENOME_FASTA&include_annotation_type=GENOME_GFF&include_annotation_type=SEQUENCE_REPORT&hydrated=FULLY_HYDRATED" -O genome-out
-   unzip -o genome-out ncbi_dataset/data/${accession}/{${accession}_*_genomic.fna,*.gff}
+   ACCESSIONS=\$(echo "${accession}" | tr '+' ' ')
+   echo "\$ACCESSIONS"
+   WEB_ROOT="https://api.ncbi.nlm.nih.gov/datasets/v2alpha/genome/accession/"
+   WEB_TAIL="download?include_annotation_type=GENOME_FASTA&include_annotation_type=GENOME_GFF&include_annotation_type=SEQUENCE_REPORT&hydrated=FULLY_HYDRATED"
+   for acc in \$ACCESSIONS
+   do
+      wget "\$WEB_ROOT/\$acc/\$WEB_TAIL" \
+         -O \$acc"_genome-out"
+      unzip -o \$acc"_genome-out" "ncbi_dataset/data/\$acc/"{"\$acc"_*_genomic.fna,*.gff}
+      mv ncbi_dataset/data/*/"\$acc"_*_genomic.fna \$acc.fna
+      mv ncbi_dataset/data/*/*.gff \$acc.gff
+   done
+
+   cat *.fna > all-nucleotides.fna
+   cat *.gff > all-annotations.gff
    """
 }
 
@@ -924,7 +937,7 @@ process MAKE_ANNDATA {
    tuple val( sample_id ), path( counts_table )
 
    output:
-   tuple val( sample_id ), path( "*.h5ad" ), path( "*.png" ), path( "figures/*.png" ), emit: main
+   tuple val( sample_id ), path( "*.h5ad" ), path( "*.pdf" ), path( "figures/*.pdf" ), emit: main
    path "*.log", emit: logs
 
    script:
@@ -1253,7 +1266,7 @@ process PLOT_UMI_DISTRIBUTIONS {
    tuple val( sample_id ), path( umi_table )
 
    output:
-   tuple val( sample_id ), path( "*.png" )
+   tuple val( sample_id ), path( "*.pdf" )
 
    script:
    """
@@ -1301,7 +1314,7 @@ process PLOT_CELLS_PER_GENE_DISTRIBUTION {
    tuple val( sample_id ), path( cells_per_gene_table )
 
    output:
-   tuple val( sample_id ), path( "*.png" )
+   tuple val( sample_id ), path( "*.pdf" )
 
    script:
    """
@@ -1340,7 +1353,7 @@ process PLOT_GENES_PER_CELL_DISTRIBUTION {
    tuple val( sample_id ), path( gene_table ), path( gene_biotype_table )
 
    output:
-   tuple val( sample_id ), path( "*.png" )
+   tuple val( sample_id ), path( "*.pdf" )
 
    script:
    """
