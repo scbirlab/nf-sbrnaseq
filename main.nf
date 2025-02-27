@@ -1019,21 +1019,11 @@ process MAKE_ANNDATA {
       fig=fig,
       name='${sample_id}.cell-qc',
    )
-   #fig, axes = scattergrid(
-   #   adata.var,
-   #   grid_columns=["n_cells_by_counts", "total_counts", "length", "pct_dropout_by_counts",],
-   #   log=["n_cells_by_counts", "total_counts", "length"],
-   #   grouping=["gene_biotype"],
-   #   aspect_ratio=1.25,
-   #)
-   #figsaver(format="png")(
-   #   fig=fig,
-   #   name='${sample_id}.gene-qc-biotype',
-   #)
    fig, axes = scattergrid(
       adata.var,
       grid_columns=["n_cells_by_counts", "total_counts", "length", "pct_dropout_by_counts",],
       log=["n_cells_by_counts", "total_counts", "length"],
+      group="chr",
       aspect_ratio=1.25,
    )
    figsaver(format="png")(
