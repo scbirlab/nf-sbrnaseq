@@ -937,7 +937,7 @@ process MAKE_ANNDATA {
    tuple val( sample_id ), path( counts_table )
 
    output:
-   tuple val( sample_id ), path( "*.h5ad" ), path( "*.pdf" ), path( "figures/*.pdf" ), emit: main
+   tuple val( sample_id ), path( "*.h5ad" ), path( "*.png" ), path( "figures/*.png" ), emit: main
    path "*.log", emit: logs
 
    script:
@@ -1015,7 +1015,7 @@ process MAKE_ANNDATA {
       log=["n_genes_by_counts", "total_counts", ],
       aspect_ratio=1.25,
    )
-   figsaver()(
+   figsaver(format="png")(
       fig=fig,
       name='${sample_id}.cell-qc',
    )
@@ -1026,7 +1026,7 @@ process MAKE_ANNDATA {
    #   grouping=["gene_biotype"],
    #   aspect_ratio=1.25,
    #)
-   #figsaver()(
+   #figsaver(format="png")(
    #   fig=fig,
    #   name='${sample_id}.gene-qc-biotype',
    #)
@@ -1036,7 +1036,7 @@ process MAKE_ANNDATA {
       log=["n_cells_by_counts", "total_counts", "length"],
       aspect_ratio=1.25,
    )
-   figsaver()(
+   figsaver(format="png")(
       fig=fig,
       name='${sample_id}.gene-qc',
    )
@@ -1191,20 +1191,20 @@ process MAKE_ANNDATA {
          ylabel="UMAP_2",
       )
    print_err("Saving UMAP plots as ${sample_id}.umap...")
-   figsaver(format="pdf")(
+   figsaver(format="png")(
       fig=fig,
       name='${sample_id}.umap',
    )
    print_err("Plotting heatmap of mean gene markers per cell cluster...")
    sc.pl.rank_genes_groups_matrixplot(
       adata,
-      save="${sample_id}.cluster-gene-markers-mean.pdf",
+      save="${sample_id}.cluster-gene-markers-mean.png",
    )
    print_err("Plotting heatmap of gene markers per cell cluster...")
    sc.pl.rank_genes_groups_heatmap(
       adata, 
       show_gene_labels=True, 
-      save="${sample_id}.cluster-gene-markers.pdf",
+      save="${sample_id}.cluster-gene-markers.png",
    )
    print_err("Done!")
    """
@@ -1282,7 +1282,7 @@ process PLOT_UMI_DISTRIBUTIONS {
    tuple val( sample_id ), path( umi_table )
 
    output:
-   tuple val( sample_id ), path( "*.pdf" )
+   tuple val( sample_id ), path( "*.png" )
 
    script:
    """
@@ -1310,7 +1310,7 @@ process PLOT_UMI_DISTRIBUTIONS {
    )
    for ax in fig.axes:
       ax.set(yscale="log")
-   figsaver(format="pdf")(
+   figsaver(format="png")(
       fig=fig,
       name='${sample_id}.umi-hist',
    )
@@ -1330,7 +1330,7 @@ process PLOT_CELLS_PER_GENE_DISTRIBUTION {
    tuple val( sample_id ), path( cells_per_gene_table )
 
    output:
-   tuple val( sample_id ), path( "*.pdf" )
+   tuple val( sample_id ), path( "*.png" )
 
    script:
    """
@@ -1349,7 +1349,7 @@ process PLOT_CELLS_PER_GENE_DISTRIBUTION {
       grid_columns=["umi_count", "cell_count"],
       log=["umi_count", "cell_count"],
    )
-   figsaver(format="pdf")(
+   figsaver(format="png")(
       fig=fig,
       name='${sample_id}.umis-and-cells-per-gene',
    )
@@ -1369,7 +1369,7 @@ process PLOT_GENES_PER_CELL_DISTRIBUTION {
    tuple val( sample_id ), path( gene_table ), path( gene_biotype_table )
 
    output:
-   tuple val( sample_id ), path( "*.pdf" )
+   tuple val( sample_id ), path( "*.png" )
 
    script:
    """
@@ -1393,7 +1393,7 @@ process PLOT_GENES_PER_CELL_DISTRIBUTION {
       )
       for ax in fig.axes:
          ax.set(yscale="log")
-      figsaver(format="pdf")(
+      figsaver(format="png")(
          fig=fig,
          name=f.split(".tsv")[0],
       )
