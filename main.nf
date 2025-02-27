@@ -942,7 +942,7 @@ process MAKE_ANNDATA {
 
    script:
    """
-   ${projectDir}/bin/make_anndata.py ${sample_id} ${counts_table}
+   python ${projectDir}/bin/make_anndata.py "${sample_id}" "${counts_table}"
    """
 }
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-
+from typing import Callable
 import sys
 
 from functools import partial
@@ -21,7 +21,7 @@ MIN_GENES_TO_KEEP = 200
 MIN_CELLS_TO_KEEP = 950
 
 def make_anndata_from_table(counts_table: str) -> pd.DataFrame:
-    print_err(f"Loading {counts_table} as a sparse matrix...")
+    
     df = pd.read_csv(counts_table, sep="\t", low_memory=False)
     cell_cat = CategoricalDtype(sorted(df[CELL_ID].unique()), ordered=True)
     gene_cat = CategoricalDtype(sorted(df[GENE_ID].unique()), ordered=True)
@@ -48,10 +48,11 @@ def save_anndata(x, filename: str, printf: Callable = print) -> None:
 
 def main() -> None:
 
-    sample_id, filename = sys.argv[:2]
+    sample_id, filename = sys.argv[1:3]
     logfile = open(f"{sample_id}.scanpy.log", "w")
     print_err = partial(print, file=logfile)
 
+    print_err(f"Loading {filename} as a sparse matrix...")
     count_df, matrix_df = make_anndata_from_table(filename)
     adata = ad.AnnData(matrix_df)
     print_err(adata)
@@ -90,18 +91,18 @@ def main() -> None:
     )
     figsaver(format="png")(
         fig=fig,
-        name='${sample_id}.cell-qc',
+        name=f'{sample_id}.cell-qc',
     )
     fig, axes = scattergrid(
         adata.var,
         grid_columns=["n_cells_by_counts", "total_counts", "length", "pct_dropout_by_counts",],
         log=["n_cells_by_counts", "total_counts", "length"],
-        group="chr",
+        grouping="chr",
         aspect_ratio=1.25,
     )
     figsaver(format="png")(
         fig=fig,
-        name='${sample_id}.gene-qc',
+        name=f'{sample_id}.gene-qc',
     )
     sc.pp.log1p(
         adata, 
@@ -140,6 +141,23 @@ def main() -> None:
     )
     print_err(adata)
 
+    # If more than 1 chr, group by and plot scatter
+    if adata.var["chr"].nunique() > 1:
+        chr_counts = sc.get.aggregate(adata, by="chr", func="sum", axis="var")
+        print_err(chr_counts)
+        chr_counts = chr_counts.to_df(layer="sum")
+        print_err(chr_counts)
+        fig, axes = scattergrid(
+            chr_counts,
+            grid_columns=chr_counts.columns,
+            # log=["n_genes_by_counts", "total_counts", ],
+            aspect_ratio=1.25,
+        )
+        figsaver(format="png")(
+            fig=fig,
+            name=f'{sample_id}.chr-counts',
+        )
+
     #print_err(f"Removing rRNA...")
     #adata = adata[:, ~adata.var["is_rRNA"]]
     #print_err(adata)
@@ -148,7 +166,7 @@ def main() -> None:
         adata, 
         exclude_highly_expressed=True,
     )
-    print_err(f"Annotating highly variable genes...")
+    print_err("Annotating highly variable genes...")
     sc.pp.highly_variable_genes(
         adata,
         flavor='seurat',
@@ -221,10 +239,10 @@ def main() -> None:
         )
         if col_is_categorical:
             for i in np.unique(colors.cat.codes):
-            plotter(
-                *adata[adata.obs[col].cat.codes == i].obsm['X_umap'].T,
-                label=i,
-            )
+                plotter(
+                    *adata[adata.obs[col].cat.codes == i].obsm['X_umap'].T,
+                    label=i,
+                )
             ax.legend(
             loc='upper center',
             bbox_to_anchor=(0.5, -0.2),
