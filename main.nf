@@ -833,23 +833,45 @@ process FEATURECOUNTS {
 
    output:
    tuple val( sample_id ), path( "*.bam" ), emit: main
-   tuple val( sample_id ), path( "*.tsv" ), emit: table
+   tuple val( sample_id ), path( "*.featureCounts.tsv" ), emit: table
    path "*.summary", emit: logs
 
    script:
    """
-   samtools index ${bamfile}
+   # make species -> chromosome mapping
+   cat \
+      <(printf 'genome_accession\\tChr\\n') \
+      <(awk -v OFS='\\t' \
+         '/^#!genome-build-accession/ { split(\$2, _species, ":"); species = _species[2] } !/#/ { if (!(\$1 in chr)) chr[\$1] = species } END { for (key in chr) print chr[key], key}' \
+         "${gff}" \
+      | sort -k2) \
+   > species-chr-map.tsv
+
+   samtools index "${bamfile}"
    featureCounts \
-      -p -C -s ${params.strand} \
-      -t ${params.ann_type} -g ${params.label} \
-      -a ${gff} \
+      -p -C \
+      -s ${params.strand} \
+      -t ${params.ann_type} \
+      -g ${params.label} \
+      -a "${gff}" \
       -R BAM \
       -T ${task.cpus} \
       --countReadPairs \
       --verbose \
       --extraAttributes Name,gene_biotype,locus_tag \
-      -o ${sample_id}.featureCounts.tsv ${bamfile}
-   cp ${sample_id}.featureCounts.tsv.summary ${sample_id}.featureCounts.log
+      -o "${sample_id}.featureCounts0.tsv" \
+      "${bamfile}"
+   mv "${sample_id}.featureCounts0.tsv.summary" "${sample_id}.featureCounts.tsv.summary"
+   cp "${sample_id}.featureCounts.tsv.summary" "${sample_id}.featureCounts.log"
+
+   cat \
+      <(head -n1 "${sample_id}.featureCounts0.tsv") \
+      <(cat \
+         <(head -n2 "${sample_id}.featureCounts0.tsv" | tail -n1) \
+         <(tail -n+3 "${sample_id}.featureCounts0.tsv" | sort -k2) \
+       | join species-chr-map.tsv - -j2 --header -t\$'\\t') \
+   > "${sample_id}.featureCounts.tsv"
+   
    """
 }
 
@@ -947,7 +969,6 @@ process MAKE_ANNDATA {
 }
 
 
-
 process JOIN_FEATURECOUNTS_UMITOOLS {
 
    tag "${sample_id}"
@@ -966,14 +987,29 @@ process JOIN_FEATURECOUNTS_UMITOOLS {
 
    script:
    """
+   pandas () (
+      local cmd="\$1"
+      local sep1=\${2:-,}
+      local idx=\${3:-False}
+      local sep2=\${4:-"\$sep1"}
+      python -c 'import sys; import pandas as pd; df = pd.read_csv(sys.stdin, sep="'"\$sep1"'", low_memory=False)'"\$cmd"'.to_csv(sys.stdout, index='"\$idx"', sep="'"\$sep2"'")'
+   )
+
+   get_col_number () (
+      local col="\$1"
+      local sep=\${2:-,}
+      head -n1 | tr "\$sep" \$'\\n' | grep -n "\$col" | cut -d: -f1
+   )
    set -x
    grep -v '^#' "${featurecounts_table}" | tr \$'\\t' , > fc0.csv
-   LOCUS_TAG_COL=\$(head -n1 fc0.csv | tr , \$'\\n' | grep -n "Geneid" | cut -d: -f1)
+   LOCUS_TAG_COL=\$(get_col_number "Geneid" < fc0.csv)
    cat \
-   <(head -n1 fc0.csv | awk -F, -v OFS=, '{ print "gene_id",\$0 }' | sed 's/,${sample_id}.*\\.dedup\\.bam\$/,featurecounts_count/' )\
-   <(tail -n+2 fc0.csv \
-      | awk -F, -v OFS=, '{ print \$'\$LOCUS_TAG_COL',\$0}' \
-      | sort -k1 -t, ) \
+      <(head -n1 fc0.csv \
+      | awk -F, -v OFS=, '{ print "gene_id",\$0 }' \
+      | sed 's/,${sample_id}.*\\.dedup\\.bam\$/,featurecounts_count/' )\
+      <(tail -n+2 fc0.csv \
+         | awk -F, -v OFS=, -v locus_tag="\$LOCUS_TAG_COL" '{ print \$locus_tag, \$0 }' \
+         | sort -k1 -t, ) \
    > fc.csv
 
    cat ${umitools_table} | tr \$'\\t' , > ut0.csv
@@ -982,28 +1018,35 @@ process JOIN_FEATURECOUNTS_UMITOOLS {
    <(tail -n+2 ut0.csv | sort -k1 -t, ) \
    > ut.csv
 
-   python -c \
-      'import pandas as pd; pd.read_csv("fc.csv").merge(pd.read_csv("ut.csv")).assign(sample_id="${sample_id}").set_index(["sample_id", "gene_id", "locus_tag", "cell_barcode"]).reset_index().to_csv("${sample_id}.all-counts.tsv", sep="\\t", index=False)'
+   pandas '.merge(pd.read_csv("ut.csv")).assign(sample_id="${sample_id}").set_index(["sample_id", "gene_id", "locus_tag", "cell_barcode"]).reset_index()' , False '\\t' \
+   < "fc.csv" \
+   > "${sample_id}.all-counts.tsv" 
    
-   # count the number of chromosomes per cell
-   printf 'n_chromosomes\\tcell_barcode\\n' >  "${sample_id}.chr-per-cell.tsv"
+   # count the number of assemblies per cell
+   printf 'n_assemblies\\tcell_barcode\\n' >  "${sample_id}.genome-per-cell.tsv"
    cat "${sample_id}.all-counts.tsv" \
    | tail -n+2 \
-   | cut -f4,6 | sort -k1 \
+   | cut -f"\$(get_col_number "cell_barcode" < "${sample_id}.all-counts.tsv")","\$(get_col_number "Chr" < "${sample_id}.all-counts.tsv")","\$(get_col_number "genome_accession" < "${sample_id}.all-counts.tsv")" \
+   | sort -k1 \
    | uniq | cut -f1 \
    | uniq -c | sort -k1 -n \
    >> "${sample_id}.chr-per-cell.tsv"
-   printf 'n_chromosomes\\tn_cell_barcodes\\n' >  "${sample_id}.chr-per-cell-summary.tsv"
-   awk 'NR > 1 { print \$1 }' "${sample_id}.chr-per-cell.tsv" \
+   printf 'n_assemblies\\tn_cell_barcodes\\n' >  "${sample_id}.genome-per-cell-summary.tsv"
+   awk 'NR > 1 { print \$1 }' "${sample_id}.genome-per-cell.tsv" \
    | uniq -c \
-   >> "${sample_id}.chr-per-cell-summary.tsv"
+   >> "${sample_id}.genome-per-cell-summary.tsv"
 
-   python -c \
-      'import pandas as pd; df = pd.read_csv("ut.csv").groupby("gene_id"); df[["cell_barcode"]].count().reset_index().merge(df[["umi_count"]].sum().reset_index()).merge(pd.read_csv("fc.csv")).rename(columns=dict(cell_barcode="cell_count")).to_csv("${sample_id}.umis-and-cells-per-gene.tsv", sep="\\t", index=False)'
-   python -c \
-      'import pandas as pd; df = pd.read_csv("${sample_id}.all-counts.tsv", sep="\\t", low_memory=False).groupby("cell_barcode"); df[["gene_id"]].count().reset_index().merge(df[["umi_count"]].sum().reset_index()).rename(columns=dict(gene_id="gene_count")).sort_values("umi_count").to_csv("${sample_id}.genes-per-cell.tsv", sep="\\t", index=False)' 
-   python -c \
-      'import pandas as pd; df = pd.read_csv("${sample_id}.all-counts.tsv", sep="\\t", low_memory=False).groupby(["cell_barcode", "gene_biotype"]); df[["gene_id"]].count().reset_index().merge(df[["umi_count"]].sum().reset_index()).rename(columns=dict(gene_id="gene_count")).sort_values("umi_count").to_csv("${sample_id}.genes-per-biotype-per-cell.tsv", sep="\\t", index=False)'
+   pandas '.groupby("gene_id"); df[["cell_barcode"]].count().reset_index().merge(df[["umi_count"]].sum().reset_index()).merge(pd.read_csv("fc.csv")).rename(columns={"cell_barcode": "cell_count"})' , False '\\t' \
+   < "ut.csv" \
+   > "${sample_id}.umis-and-cells-per-gene.tsv"
+
+   pandas '.groupby("cell_barcode"); df[["gene_id"]].count().reset_index().merge(df[["umi_count"]].sum().reset_index()).rename(columns={"gene_id": "gene_count"}).sort_values("umi_count")' '\\t' \
+   < "${sample_id}.all-counts.tsv" \
+   > "${sample_id}.genes-per-cell.tsv"
+
+   pandas '.groupby(["cell_barcode", "gene_biotype"]); df[["gene_id"]].count().reset_index().merge(df[["umi_count"]].sum().reset_index()).rename(columns={"gene_id": "gene_count"}).sort_values("umi_count")' '\\t' \
+   < "${sample_id}.all-counts.tsv" \
+   > "${sample_id}.genes-per-biotype-per-cell.tsv"
    """
 }
 

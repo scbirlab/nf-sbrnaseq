@@ -59,7 +59,7 @@ def main() -> None:
     adata.obs["sample_id"] = sample_id
 
     print_err("Annotating gene features...")
-    gene_ann_columns = ["Chr", "locus_tag", "Name", "gene_biotype", "featurecounts_count", "Length"]
+    gene_ann_columns = ["genome_accession", "Chr", "locus_tag", "Name", "gene_biotype", "featurecounts_count", "Length"]
     gene_ann_df = count_df[[GENE_ID] + gene_ann_columns].drop_duplicates().set_index(GENE_ID)
     gene_ann_df = gene_ann_df.loc[adata.var_names,:]
     for col in gene_ann_columns:
@@ -72,6 +72,28 @@ def main() -> None:
         biotype_flags.append(this_flag)
         adata.var[this_flag] = (adata.var["gene_biotype"] == biotype)
     print_err(adata)
+
+     # If more than 1 assembly, group by and plot scatter
+    unique_assembly = sorted(adata.var["genome_accession"].unique())
+    n_assembly = len(unique_assembly)
+    print_err(f"Found {n_assembly} unique genome reference(s): {unique_assembly}")
+    if n_assembly > 1:
+        assembly_counts = sc.get.aggregate(adata, by="genome_accession", func="sum", axis="var")
+        print_err(assembly_counts)
+        assembly_counts = assembly_counts.to_df(layer="sum")
+        print_err(assembly_counts)
+        fig, axes = scattergrid(
+            assembly_counts,
+            grid_columns=assembly_counts.columns,
+            # log=["n_genes_by_counts", "total_counts", ],
+            aspect_ratio=1.25,
+        )
+        print_err("Saving barnyard plots...")
+        figsaver(format="png")(
+            fig=fig,
+            name=f'{sample_id}.genome-counts',
+            df=assembly_counts,
+        )
 
     print_err("Calculating QC metrics...")
     sc.pp.calculate_qc_metrics(
@@ -86,7 +108,7 @@ def main() -> None:
     fig, axes = scattergrid(
         adata.obs,
         grid_columns=["n_genes_by_counts", "total_counts", "pct_counts_is_protein_coding", "pct_counts_is_tRNA", "pct_counts_is_rRNA", "tRNA_rRNA_ratio"],
-        log=["n_genes_by_counts", "total_counts", ],
+        log=["n_genes_by_counts", "total_counts"],
         aspect_ratio=1.25,
     )
     figsaver(format="png")(
@@ -95,9 +117,17 @@ def main() -> None:
     )
     fig, axes = scattergrid(
         adata.var,
-        grid_columns=["n_cells_by_counts", "total_counts", "length", "pct_dropout_by_counts",],
-        log=["n_cells_by_counts", "total_counts", "length"],
-        grouping="chr",
+        grid_columns=[
+            "n_cells_by_counts", 
+            "total_counts", 
+            "length", 
+            "pct_dropout_by_counts",
+        ],
+        log=[
+            "n_cells_by_counts", 
+            "total_counts",
+        ],
+        grouping="genome_accession",
         aspect_ratio=1.25,
     )
     figsaver(format="png")(
@@ -141,47 +171,38 @@ def main() -> None:
     )
     print_err(adata)
 
-    # If more than 1 chr, group by and plot scatter
-    if adata.var["chr"].nunique() > 1:
-        chr_counts = sc.get.aggregate(adata, by="chr", func="sum", axis="var")
-        print_err(chr_counts)
-        chr_counts = chr_counts.to_df(layer="sum")
-        print_err(chr_counts)
-        fig, axes = scattergrid(
-            chr_counts,
-            grid_columns=chr_counts.columns,
-            # log=["n_genes_by_counts", "total_counts", ],
-            aspect_ratio=1.25,
-        )
-        figsaver(format="png")(
-            fig=fig,
-            name=f'{sample_id}.chr-counts',
-        )
-
     #print_err(f"Removing rRNA...")
     #adata = adata[:, ~adata.var["is_rRNA"]]
     #print_err(adata)
-    print_err("Normalizing to counts per cell...")
-    sc.pp.normalize_total(
-        adata, 
-        exclude_highly_expressed=True,
-    )
-    print_err("Annotating highly variable genes...")
-    sc.pp.highly_variable_genes(
-        adata,
-        flavor='seurat',
-    )
+    # print_err("Normalizing to counts per cell...")
+    # sc.pp.normalize_total(
+    #     adata, 
+    #     exclude_highly_expressed=True,
+    # )
     adata.var["not_is_rRNA"] = (~adata.var["is_rRNA"])
-    adata.var["highly_variable_non_rRNA"] = ((~adata.var["is_rRNA"]) & adata.var["highly_variable"])
-    print_err(f"Found {adata.var['highly_variable_non_rRNA'].sum()=} highly variable genes!")
+    print_err("Annotating highly variable genes...")
+    try:
+        sc.pp.highly_variable_genes(
+            adata,
+            flavor='seurat',
+        )
+    except ValueError as e:
+        print_err(e)
+        use_highly_variable = False
+    else:
+        adata.var["highly_variable_non_rRNA"] = ((~adata.var["is_rRNA"]) & adata.var["highly_variable"])
+        print_err(f"Found {adata.var['highly_variable_non_rRNA'].sum()=} highly variable genes!")
+        use_highly_variable = (adata.var['highly_variable_non_rRNA'].sum() >= 3)
     print_err(adata)
-    use_highly_variable = (adata.var['highly_variable_non_rRNA'].sum() >= 3)
 
     print_err("Applying PCA...")
-    sc.pp.pca(
-        adata, 
-        mask_var="highly_variable_non_rRNA" if use_highly_variable else "not_is_rRNA",
-    )
+    try:
+        sc.pp.pca(
+            adata, 
+            mask_var="highly_variable_non_rRNA" if use_highly_variable else "not_is_rRNA",
+        )
+    except ValueError as e:
+        print_err(e)
     print_err("Getting nearest neighbours...")
     sc.pp.neighbors(
         adata, 
@@ -258,7 +279,7 @@ def main() -> None:
             )
             fig.colorbar(scatter, ax=ax)
         ax.set(
-            title=f"{n_cells} cells x {n_genes} genes\\n{col}", 
+            title=f"{n_cells} cells x {n_genes} genes\n{col}", 
             xlabel="UMAP_1", 
             ylabel="UMAP_2",
         )
