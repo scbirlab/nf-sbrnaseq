@@ -16,11 +16,12 @@ dependencies:
     - bioconda::star
     - bioconda::stringtie
     - bioconda::subread
-    - umi_tools==1.1.6
+    - bioconda::umi_tools=1.1.6
     - conda-forge::gnuplot
     - conda-forge::libjpeg-turbo
     - conda-forge::r-base
     - conda-forge::r-essentials
+    - conda-forge::unzip
     - pip:
         - 'carabiner-tools[mpl,pd]>=0.0.4'
         - 'cutadapt>=5.0'
@@ -28,4 +29,3 @@ dependencies:
         - 'numpy>=2.1.3'
         - 'RSeQC'
         - 'scanpy[leiden]>=1.10.4'
-        - 'umi_tools==1.1.6'
