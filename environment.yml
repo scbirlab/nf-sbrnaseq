@@ -7,16 +7,24 @@ channels:
 dependencies:
     - python==3.12
     - pip
+    - bioconda::bedops
     - bioconda::bowtie2
     - bioconda::fastqc
+    - bioconda::minimap2
     - bioconda::samtools
     - bioconda::sra-tools
     - bioconda::star
+    - bioconda::stringtie
     - bioconda::subread
+    - conda-forge::gnuplot
+    - conda-forge::libjpeg-turbo
+    - conda-forge::r-base
+    - conda-forge::r-essentials
     - pip:
         - 'carabiner-tools[mpl,pd]>=0.0.4'
         - 'cutadapt>=5.0'
         - 'multiqc>=1.27'
         - 'numpy>=2.1.3'
+        - 'RSeQC'
         - 'scanpy[leiden]>=1.10.4'
         - 'umi_tools==1.1.6'
