@@ -4,8 +4,6 @@
 process bowtie2_index {
 
    tag "${id}"
-
-   container 'docker://staphb/bowtie2:2.5.4'
    
    input:
    tuple val( id ), path( fasta )
@@ -35,8 +33,6 @@ process bowtie2_align {
       mode: 'copy',
       saveAs: { "${id}.${it}" }
    )
-
-   container 'docker://staphb/bowtie2:2.5.4'
 
    input:
    tuple val( id ), path( reads ), path( idx ), val( genome_acc )

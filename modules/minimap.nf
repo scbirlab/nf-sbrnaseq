@@ -1,8 +1,6 @@
 process minimap_index {
 
    tag "${genome_id}"
-
-   container 'docker://staphb/minimap2:2.29'
    
    input:
    tuple val( genome_id ), path( fasta )
@@ -35,8 +33,6 @@ process minimap_align {
       saveAs: { "${id}.${it}" },
       pattern: "*.{sam,log}"
    )
-
-   container 'docker://staphb/minimap2:2.29'
 
    input:
    tuple val( id ), path( reads ), path( idx ), val( genome_acc )

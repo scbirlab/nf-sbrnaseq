@@ -3,8 +3,6 @@ process fastQC {
 
    tag "${sample_id}"
    label 'med_mem'
-
-   container 'https://depot.galaxyproject.org/singularity/fastqc:0.12.1--hdfd78af_0'
    
    input:
    tuple val( sample_id ), path ( reads )

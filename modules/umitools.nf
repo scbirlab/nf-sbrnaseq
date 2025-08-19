@@ -16,9 +16,6 @@ process UMItools_extract {
       pattern: "*.extract.log", 
    )
 
-
-   container params.umitools_image
-
    input:
    tuple val( id ), path( reads ), val( umis ), path( whitelist )
 
@@ -82,8 +79,6 @@ process UMItools_count {
 
    // errorStrategy 'retry'
    // maxRetries 2
-
-   container params.umitools_image
 
    input:
    tuple val( sample_id ), path( bamfile )

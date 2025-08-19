@@ -14,8 +14,6 @@ process trim_using_cutadapt {
       mode: 'copy',
    )
 
-   container 'docker://pipecraft/cutadapt:4.4'
-
    input:
    tuple val( id ), path( reads, stageAs: "?/*" ), val( adapters5 ), val( adapters3 )
    tuple val( trim_qual ), val( min_length )
@@ -82,8 +80,6 @@ process trim_nanopore_using_cutadapt {
       "${params.outputs}/trimmed",
       mode: 'copy',
    )
-
-   container 'docker://pipecraft/cutadapt:4.4'
 
    input:
    tuple val( id ), path( reads ), val( adapter5 ), val( adapter3 )

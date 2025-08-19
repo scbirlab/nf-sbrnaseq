@@ -9,8 +9,6 @@ process SAMtools_stats {
         saveAs: { "${id}.${it}" },
     )
 
-    container 'docker://mgibio/samtools:v1.21-noble'
-
     input:
     tuple val( id ), path( bamfile )
 
@@ -33,8 +31,6 @@ process plot_bamstats {
         mode: 'copy',
         saveAs: { "${id}.${it}" },
     )
-
-    container 'docker://pegi3s/samtools_bcftools:1.9'
 
     input:
     tuple val( id ), path( txt )
@@ -61,8 +57,6 @@ process SAMtools_flagstat {
         mode: 'copy',
         saveAs: { "${id}.${it}" },
     )
-    
-    container 'docker://mgibio/samtools:v1.21-noble'
 
     input:
     tuple val( id ), path( bamfile )
@@ -93,8 +87,6 @@ process SAMtools_coverage {
         saveAs: { "${id}.${it}" },
     )
 
-    container 'docker://mgibio/samtools:v1.21-noble'
-
     input:
     tuple val( id ), path( bamfile )
 
@@ -118,8 +110,6 @@ process remove_multimappers {
     //     mode: 'copy',
     //     saveAs: { "${id}.${it}" },
     // )
-
-    container 'docker://mgibio/samtools:v1.21-noble'
 
     input:
     tuple val( id ), path( bamfile )

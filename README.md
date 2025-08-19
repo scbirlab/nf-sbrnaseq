@@ -17,7 +17,7 @@ For each sample:
 
 1. Trim reads to adapters using `cutadapt`. Reads from sbRNA-seq will be flanked by sequences containing cell barcodes and UMIs, so this step trims any extra sequences either side of these flanking sequences.
 2. Extract cell barcodes and UMIs using `umi-tools`.
-3. Map to genome FASTA using `STAR` (`bowtie2` is available as an alternative).
+3. Map to genome FASTA using `bowtie2` (`STAR` and `minimap2` are available as an alternative).
 4. Deduplicate mapped reads using `umitools`.
 5. Count deduplicated reads per gene using `featureCounts`.
 6. Count deduplicated reads per gene per cell using `umi-tools`.
@@ -105,7 +105,7 @@ The following parameters have default values can be overridden if necessary.
 - `allow_cell_errors = true`: Whether to allow 1 error when matching cell barcodes in the whitelist. Otherwise only exact matches are allowed. This is ignored when the total length of the cell barcode is too long, which would generate an infeasibly large whitelist.
 - `inputs = "inputs"`: path to directory containing files referenced in the `sample_sheet`, such as lists of guide RNAs.
 - `output = "outputs"`: path to directory to put output files 
-- `use_star = true`: use `STAR` for aligning reads. Otherwise, the pipeline will use `bowtie2`. 
+- `mapper = "bowtie2"`: Which mapping tool to use for read alignment. Choices: "bowtie2", "star", "minimap2".
 - `trim_qual = 5` : For `cutadapt`, the minimum Phred score for trimming 3' calls
 - `min_length = "9:38"` : For `cutadapt`, the minimum trimmed length of a read (`forward:reverse`). Shorter reads will be discarded
 - `strand = 1` : For `featureCounts`, the strandedness of RNA-seq. `1` for forward, `2` for reverse.

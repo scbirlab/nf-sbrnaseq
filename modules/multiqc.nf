@@ -11,8 +11,6 @@ process multiQC {
       mode: 'copy',
    )
 
-   container 'docker://multiqc/multiqc:v1.29'
-
    input:
    path( '*', stageAs: '?/*' )
 

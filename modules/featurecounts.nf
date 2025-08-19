@@ -17,8 +17,6 @@ process featurecounts {
       pattern: "*.log",
    )
 
-   container 'docker://genomicpariscentre/featurecounts:1.5.3'
-
    input:
    tuple val( id ), path( bamfile ), path( gff )
    val paired

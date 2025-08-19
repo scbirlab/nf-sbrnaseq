@@ -34,8 +34,6 @@ process add_errors_to_whitelist {
    tag "${id}"
    label "big_time"
 
-   container 'docker://python'
-
    input:
    tuple val( id ), path( whitelist )
 

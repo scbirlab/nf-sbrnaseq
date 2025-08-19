@@ -81,15 +81,24 @@ process count_genomes_per_cell {
    set -x
    
    # count the number of assemblies per cell
-   cell_bc_col=\$(get_col_number "cell_barcode" \$'\t' < "${joined_table}")
-   chr_col=\$(get_col_number "Chr"  \$'\t' < "${joined_table}")
-   genome_col=\$(get_col_number "genome_accession"  \$'\t' < "${joined_table}")
-   awk -F'\t' -v OFS='\t' \
-      -v bc_col="cell_barcode" -v g_col="genome_accession" \
+   cell_bc_col=\$(get_col_number "cell_barcode" \$'\\t' < "${joined_table}")
+   chr_col=\$(get_col_number "Chr"  \$'\\t' < "${joined_table}")
+   genome_col=\$(get_col_number "genome_accession"  \$'\\t' < "${joined_table}")
+   awk -F'\\t' -v OFS='\\t' \
+      -v bc_col="cell_barcode" \
+      -v g_col="genome_accession" \
       '
-      BEGIN { print "cell_barcode", "n_genomes" } 
+      BEGIN { print bc_col, "n_genomes" } 
       NR == 1 { for (i = 1; i <= NF; i++) col_idx[\$i]=i } 
-      NR > 1 { a[\$col_idx[bc_col]][\$col_idx[g_col]]++; if (a[\$col_idx[bc_col]][\$col_idx[g_col]] == 1) counts[\$col_idx[bc_col]]++ } 
+      NR > 1 {
+         bc = \$(col_idx[bc_col])
+         g = \$(col_idx[g_col])
+         key = bc SUBSEP g
+         if (!(key in seen)) {
+            seen[key]=1
+            counts[bc]++
+         }
+      }
       END { for (bc in counts) print bc, counts[bc] }
       ' \
       "${joined_table}" \

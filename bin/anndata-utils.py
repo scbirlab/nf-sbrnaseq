@@ -157,10 +157,13 @@ def _build(args: Namespace) -> None:
     )
 
     print_err("Calculating QC metrics...")
+    percentiles = [q for q in (50, 100) if q <= adata.n_vars]
+    if not percentiles and adata.n_vars > 0:
+        percentiles = [min(10, adata.n_vars)]
     sc.pp.calculate_qc_metrics(
         adata, 
         qc_vars=biotype_flags, 
-        percent_top=(50, 100),
+        percent_top=percentiles,
         inplace=True,
     )
 
@@ -380,8 +383,27 @@ def _cluster(args: Namespace) -> None:
         df=pd.DataFrame(adata.obsm['X_umap'], columns=["UMAP_1", "UMAP_2"], index=adata.obs_names),
     )
     print_err("Plotting heatmap of mean gene markers per cell cluster...")
+    # Compute a dendrogram on a dense representation only (avoids pandas+csr bug)
+    try:
+        if "X_pca" in adata.obsm_keys():
+            sc.tl.dendrogram(adata, groupby="leiden", use_rep="X_pca", key_added="dendrogram_leiden")
+            dendro_arg = "dendrogram_leiden"
+        else:
+            if sp.issparse(adata.X):
+                adata.obsm["X_dense"] = adata.X.toarray()
+                rep = "X_dense"
+            else:
+                rep = "X"
+            sc.tl.dendrogram(adata, groupby="leiden", use_rep=rep, key_added="dendrogram_leiden")
+            dendro_arg = "dendrogram_leiden"
+    except Exception as e:
+        print(f"[warn] dendrogram computation failed: {e}. Proceeding without dendrogram.")
+        dendro_arg = False
     sc.pl.rank_genes_groups_matrixplot(
         adata,
+        n_genes=min(10, adata.n_vars),
+        groupby="leiden",
+        dendrogram=dendro_arg,
         save=f"{args.output}.cluster-gene-markers-mean.{args.plot_format}",
     )
     print_err("Plotting heatmap of gene markers per cell cluster...")

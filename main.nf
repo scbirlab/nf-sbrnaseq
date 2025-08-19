@@ -444,23 +444,23 @@ workflow {
    //    .combine( merge_stringtie.out, by: 0 )  // sample_id, dedup_bam, gff
    //    | stringtie_count
 
-   // featurecounts.out.main
-   //    | UMItools_count   // sample_id, counts
+   featurecounts.out.main
+      | UMItools_count   // sample_id, counts
 
-   // UMItools_count.out.main
-   //    .combine( featurecounts.out.table, by: 0 )  // sample_id, umitools_counts, featurecounts_counts
-   //    | join_featurecounts_UMItools
-   // join_featurecounts_UMItools.out
-   //    | ( 
-   //       plot_UMI_distributions 
-   //       & count_genomes_per_cell 
-   //       & plot_cells_per_gene_distribution
-   //       & plot_genes_per_cell_distribution
-   //       & build_AnnData
-   //    )
+   UMItools_count.out.main
+      .combine( featurecounts.out.table, by: 0 )  // sample_id, umitools_counts, featurecounts_counts
+      | join_featurecounts_UMItools
+   join_featurecounts_UMItools.out
+      | ( 
+         plot_UMI_distributions 
+         & count_genomes_per_cell 
+         & plot_cells_per_gene_distribution
+         & plot_genes_per_cell_distribution
+         & build_AnnData
+      )
 
-   // build_AnnData.out.main | filter_AnnData
-   // filter_AnnData.out.main | cluster_cells
+   build_AnnData.out.main | filter_AnnData
+   filter_AnnData.out.main | cluster_cells
 
    trim_logs
       .map { it[1] }
