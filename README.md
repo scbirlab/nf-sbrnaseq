@@ -1,4 +1,4 @@
-# Illumina paired-end sbRNA-seq pipeline
+# sbRNA-seq pipeline
 
 ![GitHub Workflow Status (with branch)](https://img.shields.io/github/actions/workflow/status/scbirlab/nf-sbrnaseq/nf-test.yml)
 [![Nextflow](https://img.shields.io/badge/nextflow%20DSL2-%E2%89%A523.10.0-23aa62.svg)](https://www.nextflow.io/)
