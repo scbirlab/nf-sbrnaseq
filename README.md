@@ -1,8 +1,27 @@
 # Illumina paired-end sbRNA-seq pipeline
 
-Nextflow pipeline to process *already demultiplexed* Illumina paired-end FASTQ files from multiple bacterial samples into a gene $\times$ cell count table.
+![GitHub Workflow Status (with branch)](https://img.shields.io/github/actions/workflow/status/scbirlab/nf-sbrnaseq/nf-test.yml)
+[![Nextflow](https://img.shields.io/badge/nextflow%20DSL2-%E2%89%A523.10.0-23aa62.svg)](https://www.nextflow.io/)
+[![run with conda](https://img.shields.io/badge/run%20with-conda-3EB049?labelColor=000000&logo=anaconda)](https://docs.conda.io/en/latest/)
+[![run with docker](https://img.shields.io/badge/run%20with-docker-0db7ed?labelColor=000000&logo=docker)](https://www.docker.com/)
+[![run with singularity](https://img.shields.io/badge/run%20with-singularity-1d355c.svg?labelColor=000000)](https://sylabs.io/docs/)
+
+**scbirlab/nf-sbrnaseq** is a Nextflow pipeline to process *already demultiplexed* Illumina paired-end or Nanopre FASTQ files from multiple bacterial samples into a gene $\times$ cell count table.
+
+**Table of contents**
+
+- [Processing steps](#processing-steps)
+- [Requirements](#requirements)
+- [Quick start](#quick-start)
+- [Inputs](#inputs)
+- [Outputs](#outputs)
+- [Credit](#credit)
+- [Issues, problems, suggestions](#issues-problems-suggestions)
+- [Further help](#further-help)
 
 ## Processing steps
+
+**scbirlab/nf-sbrnaseq** carries out the following steps
 
 For each set of barcodes:
 
@@ -31,22 +50,32 @@ For each sample:
 
 ### Downstream analyses [work in progress, not yet implemented]
 
-1. De novo transcriptome assembly with Trinity.
+1. De novo transcriptome assembly with Annogesic.
 2. Isoform analysis with RSEM.
-3. Plotting and visualisation.
 
 ### Other steps
 
 1. Get FASTQ quality metrics with `fastqc`.
-2. Compile the logs of processing steps into an HTML report with `multiqc`.
+2. Calculate gene body coverage with `RSeQC` and other metrics with `samtools`.  
+3. Compile the logs of processing steps into an HTML report with `multiqc`.
 
 ## Requirements
 
 ### Software
 
-You need to have Nextflow and `conda` installed on your system.
+You need to have Nextflow and either Anaconda, Docker, or Singularity installed on your system.
 
 ### First time using Nextflow?
+
+##### Crick users
+
+If you're at the Crick **or your shared cluster has Nextflow and Singularity already installed**, try:
+
+```bash
+module load Nextflow Singularity
+```
+
+##### Others
 
 If it's your first time using Nextflow on your system, you can install it using `conda`:
 
@@ -71,7 +100,7 @@ source ~/.bash_profile
 
 ## Quick start
 
-Make a [sample sheet (see below)](#sample-sheet)  and, optionally, a [`nextflow.config` file](#inputs) in the directory where you want the pipeline to run. Then run Nextflow.
+Make a [sample sheet (see below)](#sample-sheet) and, optionally, a [`nextflow.config` file](#inputs) in the directory where you want the pipeline to run. Then run Nextflow.
 
 ```bash 
 nextflow run scbirlab/nf-sbrnaseq
@@ -81,7 +110,7 @@ Each time you run the pipeline after the first time, Nextflow will use a locally
 the pipeline, use the `-r <version>` flag. For example,
 
 ```bash 
-nextflow run scbirlab/nf-sbrnaseq -r v0.0.9
+nextflow run scbirlab/nf-sbrnaseq -r v0.0.10
 ```
 
 A list of versions can be found by running `nextflow info scbirlab/nf-sbrnaseq`.
@@ -101,6 +130,8 @@ If you're using local FASTQ data (the default, `from_sra = false`), you also nee
 
 The following parameters have default values can be overridden if necessary.
 
+- `nanopore = false`: Whether inputs are from Oxford Nanopore (instead of Illumina)
+- `reverse = ''`: Which barcodes (see [Sample sheet](#sample-sheet)) to reverse complement before building the whitelist
 - `from_sra = false`: whether to fetch FASTQ files from an SRA Run ID instead of loading local files. In this case, your sample sheet needs a column headed `Run` to indicate the Run ID.
 - `allow_cell_errors = true`: Whether to allow 1 error when matching cell barcodes in the whitelist. Otherwise only exact matches are allowed. This is ignored when the total length of the cell barcode is too long, which would generate an infeasibly large whitelist.
 - `inputs = "inputs"`: path to directory containing files referenced in the `sample_sheet`, such as lists of guide RNAs.
@@ -178,7 +209,7 @@ It must have a header row and two columns, with the second column being the barc
 
 ## Outputs
 
-Outputs are saved in the same directory as `sample_sheet`. They are organised under three directories:
+Outputs are saved in the same directory as `sample_sheet`. They are organised under several directories including:
 
 - `processed`: FASTQ files and logs resulting from trimming and UMI extraction
 - `counts`: tables and BAM files corresponding to cell $\times$ gene counts
@@ -190,14 +221,18 @@ Add to the [issue tracker](https://www.github.com/scbirlab/nf-sbrnaseq/issues).
 
 ## Further help
 
-Here are the help pages of the software used by this pipeline.
+Here are the help pages of the software used by **scbirlab/nf-sbrnaseq**.
 
-- [fastqc](https://www.bioinformatics.babraham.ac.uk/projects/fastqc/)
-- [multiqc](https://multiqc.info/)
-- [nextflow](https://www.nextflow.io/docs/latest/index.html)
+- [fastQC](https://www.bioinformatics.babraham.ac.uk/projects/fastqc/)
+- [multiQC](https://multiqc.info/)
+- [Nextflow](https://www.nextflow.io/docs/latest/index.html)
 - [cutadapt](https://cutadapt.readthedocs.io/en/stable/index.html)
-- [umitools](https://umi-tools.readthedocs.io/en/latest/index.html)
+- [UMItools](https://umi-tools.readthedocs.io/en/latest/index.html)
 - [featureCounts](https://subread.sourceforge.net/featureCounts.html)
 - [STAR](https://github.com/alexdobin/STAR/blob/master/doc/STARmanual.pdf)
 - [bowtie2](https://bowtie-bio.sourceforge.net/bowtie2/manual.shtml)
+- [minimap2](https://lh3.github.io/minimap2/minimap2.html)
 - [samtools](http://www.htslib.org/doc/samtools.html)
+- [BEDOPS](https://bedops.readthedocs.io/en/latest/index.html)
+- [RSeqQC](https://rseqc.sourceforge.net/#)
+- [scanpy](https://scanpy.readthedocs.io/en/stable/tutorials/index.html)
