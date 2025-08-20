@@ -11,14 +11,14 @@
 
 nextflow.enable.dsl=2
 pipeline_title = """\
-                  S C B I R   s b R N A - S E Q   P I P E L I N E
-                  ===============================================
+   S C B I R   s b R N A - S E Q   P I P E L I N E
+   ===============================================
 
-                  Nextflow pipeline to process demultiplexed Illumina paired-end 
-                  FASTQ files from multiple bacterial samples into a gene x
-                  cell count table.
-                  """
-                  .stripIndent()
+   Nextflow pipeline to process demultiplexed Illumina paired-end 
+   FASTQ files from multiple bacterial samples into a gene x
+   cell count table.
+   """
+   .stripIndent()
 
 /*
 ========================================================================================
@@ -293,10 +293,12 @@ workflow {
 
    }
    
-   barcode_ch
+   build_whitelist(
+      barcode_ch
       .map { it[1..2] }  // wl_id, [BCs]
-      .unique()
-      | build_whitelist  // wl_id, whitelist
+      .unique(),
+      Channel.value( params.reverse ),
+   )
    
    if ( params.allow_cell_errors ) {
       
@@ -420,7 +422,7 @@ workflow {
       | gff2bed
 
    collapsed
-   .map { tuple( it[0], it[1] ) }
+      .map { tuple( it[0], it[1] ) }
       .combine( 
          gff2bed.out,
          by: 0,
@@ -444,8 +446,10 @@ workflow {
    //    .combine( merge_stringtie.out, by: 0 )  // sample_id, dedup_bam, gff
    //    | stringtie_count
 
-   featurecounts.out.main
-      | UMItools_count   // sample_id, counts
+   UMItools_count(
+      featurecounts.out.main,
+      Channel.value( !params.nanopore ),
+   ) // sample_id, counts
 
    UMItools_count.out.main
       .combine( featurecounts.out.table, by: 0 )  // sample_id, umitools_counts, featurecounts_counts
