@@ -1,2 +1,11 @@
 .nextflow*
-work/*
+.conda/
+.docker/
+.singularity/
+test/*/outputs/
+test/*/.nextflow/
+test/*/work/
+test/*/*.html
+test/*/*.log
+work/
+*.html

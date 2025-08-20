@@ -1,0 +1,2 @@
+sample_id,fastq_pattern,genome_accession,bc1,bc2,bc3,adapter_5prime,adapter_3prime,umi
+2025_ont-test,reads-mini,GCF_000005845.2,SCBIR_sbRNAseq_oligosx96_eoj_v03_241009-bc1.csv,SCBIR_sbRNAseq_oligosx96_eoj_v03_241009-bc2.csv,SCBIR_sbRNAseq_oligosx96_eoj_v03_241009-bc3.csv,TCGTCGGCAGCGTCAGATGTGTATAAGAGACAGN{7}G{3},N{7}N{8}STCTGGCGTAGGAGGWN{7},^(?P<discard_3>.{33})(?P<cell_1>.{7})(?P<discard_1>.{3}).*(?P<cell_3>.{7})(?P<umi_1>.{8})(?P<discard_2>.{16})(?P<cell_2>.{7})$
