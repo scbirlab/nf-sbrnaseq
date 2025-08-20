@@ -1,7 +1,6 @@
  #!/usr/bin/env bash
 
-set -x
-set -e
+set -euox pipefail
 
 script_dir="$(dirname $0)"
 DOCKER=${1:-no}
@@ -15,10 +14,12 @@ else
     docker_flag=''
 fi
 
-cd "$script_dir"/ont
-nextflow run "$script_dir"/../.. \
+nextflow run "$script_dir"/.. \
     -resume $docker_flag \
+    --nanopore \
+    --mapper minimap2 \
+    --reverse '2 3' \
     --sample_sheet "$script_dir"/ont/sample-sheet.csv \
     --inputs "$script_dir"/ont/inputs \
+    --fastq_dir "$script_dir"/ont/fastq \
     --outputs "$script_dir"/ont/outputs
-cd ..
