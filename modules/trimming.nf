@@ -100,8 +100,8 @@ process trim_nanopore_using_cutadapt {
 		-g '${adapter5}' \
       --error-rate \$ERROR_RATE \
       --overlap \$MIN_OVERLAP \
-		-q ${trim_qual} \
-      --minimum-length ${min_length.split(':')[0]} \
+		-q ${trim_qual.toString().split(',')[0]} \
+      --minimum-length ${min_length.toString().split(':')[0]} \
       --revcomp \
       -j ${task.cpus} \
 		--report full \
@@ -114,7 +114,7 @@ process trim_nanopore_using_cutadapt {
 		-a '${adapter3}' \
       --error-rate \$ERROR_RATE \
       --overlap \$MIN_OVERLAP \
-		--minimum-length ${min_length.split(':')[0]} \
+		--minimum-length ${min_length.toString().split(':')[0]} \
       -j ${task.cpus} \
 		--report full \
       --action retain \
