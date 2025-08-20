@@ -9,3 +9,4 @@ test/*/work/
 test/*/*.html
 test/*/*.log
 work/
+*.html
