@@ -28,8 +28,6 @@ process UMIcollapse {
       "${params.outputs}/umicollapse", 
       mode: 'copy',
    )
-
-   container params.umicollapse_image
    
    input:
    tuple val( id ), path( bamfile ), path( umicollapse_repo )
