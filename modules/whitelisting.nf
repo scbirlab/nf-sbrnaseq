@@ -1,30 +1,71 @@
 // Build whitelist from provided barcode files
 process build_whitelist {
 
-   tag "${id}"
+   tag "${id}:rev ${reverse}"
+
+   publishDir( 
+      "${params.outputs}/barcodes", 
+      mode: 'copy',
+      pattern: "whitelist.txt",
+      saveAs: { "${id}-${it}" },
+   )
 
    input:
    tuple val( id ), path( bcs )
+   val reverse
 
    output:
    tuple val( id ), path( "whitelist.txt" )
 
    script:
    """
-   for f in ${bcs}
+   set -euox
+   BARCODES=(${bcs})
+   for i in "\${!BARCODES[@]}"
    do
-      tail -n+2 \$f \
-      | tr -d \$'\\r' \
-      | sort \
+      i_p1=\$(("\$i"+1))
+      f="\${BARCODES[\$i]}"
+
+      tr -d \$'\\r' \
+      < "\$f" \
+      > "\$f".clean \
+      && mv "\$f".clean "\$f"
+
+      cp "\$f" "\$f".inp
+
+      for j in ${reverse}
+      do
+         if [ "\$i_p1" -eq "\$j" ]
+         then
+            paste -d, \
+             <(
+               tail -n+2 "\$f" \
+               | cut -f1 -d,
+             ) \
+             <(
+               tail -n+2 "\$f" \
+               | cut -f2 -d, \
+               | tr ATCGNatcgn TAGCNtagcn \
+               | rev
+             ) \
+            > "\$f".rev
+
+            head -n1 "\$f" \
+            | cat - "\$f".rev \
+            > "\$f".inp
+         fi
+      done
+
+      tail -n+2 "\$f".inp \
       | awk -F, -v OFS=, '{ print "__JOIN__", \$2 }' \
-      | sort -t, -k1 \
-      > \$f.temp
+      > "\$f.temp"
    done
 
    join -t, ${bcs[0]}.temp ${bcs[1]}.temp \
    | join -t, - ${bcs[2]}.temp \
    | awk -F, '{ print \$2\$3\$4 }' \
    > whitelist.txt
+
    """
 }
 
@@ -33,6 +74,13 @@ process add_errors_to_whitelist {
 
    tag "${id}"
    label "big_time"
+
+   publishDir( 
+      "${params.outputs}/barcodes", 
+      mode: 'copy',
+      pattern: "whitelist.txt",
+      saveAs: { "${id}-${it}" },
+   )
 
    input:
    tuple val( id ), path( whitelist )
