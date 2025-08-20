@@ -12,7 +12,7 @@ process featurecounts {
    maxRetries 2
 
    publishDir( 
-      "${params.outputs}/counts", 
+      "${params.outputs}/featurecounts", 
       mode: 'copy',
       pattern: "*.log",
    )
@@ -24,7 +24,7 @@ process featurecounts {
    output:
    tuple val( id ), path( "*.bam" ), emit: main
    tuple val( id ), path( "*.featureCounts.tsv" ), emit: table
-   path "*.summary", emit: logs
+   path "*.{summary,log}", emit: logs
 
    script:
    """
@@ -43,13 +43,13 @@ process featurecounts {
 
    samtools index "${bamfile}"
    featureCounts \
-      -p -C \
+      -C \
       -s ${params.strand} \
       -t ${params.ann_type} \
       -g ${params.label} \
       -a "${gff}" \
       -R BAM \
-      -T ${task.cpus} ${paired ? '--countReadPairs' : ''} \
+      -T ${task.cpus} ${paired ? '--countReadPairs -p' : ''} \
       --verbose \
       --extraAttributes Name,gene_biotype,locus_tag \
       -o "${id}.featureCounts0.tsv" \
@@ -59,10 +59,12 @@ process featurecounts {
 
    cat \
       <(head -n1 "${id}.featureCounts0.tsv") \
-      <(cat \
-         <(head -n2 "${id}.featureCounts0.tsv" | tail -n1) \
-         <(tail -n+3 "${id}.featureCounts0.tsv" | sort -k2) \
-       | join species-chr-map.tsv - -j2 --header -t\$'\\t') \
+      <(
+         cat \
+            <(head -n2 "${id}.featureCounts0.tsv" | tail -n1) \
+            <(tail -n+3 "${id}.featureCounts0.tsv" | sort -k2) \
+         | join species-chr-map.tsv - -j2 --header -t\$'\\t'
+      ) \
    > "${id}.featureCounts.tsv"
    
    """

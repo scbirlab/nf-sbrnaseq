@@ -80,8 +80,15 @@ process UMItools_count {
    // errorStrategy 'retry'
    // maxRetries 2
 
+   publishDir( 
+      "${params.outputs}/counts", 
+      mode: 'copy',
+      saveAs: { "${id}-${it}" }, 
+   )
+
    input:
    tuple val( sample_id ), path( bamfile )
+   val paired
 
    output:
    tuple val( sample_id ), path( "*.tsv" ), emit: main
@@ -92,12 +99,9 @@ process UMItools_count {
    samtools sort ${bamfile} -o ${bamfile.getBaseName()}.sorted.bam
    samtools index ${bamfile.getBaseName()}.sorted.bam
    umi_tools count \
-      --paired \
-		--per-gene \
+		--per-gene ${paired ? '--paired --chimeric-pairs discard --unpaired-reads discard' : ''} \
       --per-cell \
 		--gene-tag XT \
-      --chimeric-pairs discard \
-      --unpaired-reads discard \
       --log ${sample_id}.count.log \
 		--stdin ${bamfile.getBaseName()}.sorted.bam \
       --stdout ${sample_id}.umitools_count.tsv \

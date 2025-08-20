@@ -3,7 +3,7 @@
  */
 process trim_using_cutadapt {
 
-   tag "${id}"
+   tag "${id}:q > ${trim_qual}:l > ${min_length}"
    label "big_mem" 
    
    // errorStrategy 'retry'
@@ -73,7 +73,7 @@ process trim_using_cutadapt {
 
 process trim_nanopore_using_cutadapt {
 
-   tag "${id}"
+   tag "${id}:q > ${trim_qual}:l > ${min_length}"
    label "big_mem" 
 
    publishDir( 
@@ -100,12 +100,12 @@ process trim_nanopore_using_cutadapt {
 		-g '${adapter5}' \
       --error-rate \$ERROR_RATE \
       --overlap \$MIN_OVERLAP \
-		-q ${params.trim_qual},${params.trim_qual} \
-      --minimum-length ${params.min_length} \
+		-q ${trim_qual} \
+      --minimum-length ${min_length.split(':')[0]} \
       --revcomp \
       -j ${task.cpus} \
-		--report=full \
-      --action=retain \
+		--report full \
+      --action retain \
 		-o "${id}_3prime.fastq.gz" \
 		"${id}_5prime.fastq.gz" \
    > "${id}_5prime.cutadapt.log"
@@ -114,13 +114,13 @@ process trim_nanopore_using_cutadapt {
 		-a '${adapter3}' \
       --error-rate \$ERROR_RATE \
       --overlap \$MIN_OVERLAP \
-		--minimum-length ${params.min_length} \
+		--minimum-length ${min_length.split(':')[0]} \
       -j ${task.cpus} \
-		--report=full \
-      --action=retain \
+		--report full \
+      --action retain \
 		-o "${id}.with-adapters.fastq.gz" \
 		"${id}_3prime.fastq.gz" \
-   > "${id}.with-adapters.cutadapt.log"
+   > "${id}_3prime.cutadapt.log"
 
    """
 }
