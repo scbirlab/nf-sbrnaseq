@@ -11,7 +11,7 @@ then
     docker_flag='-profile gh'
 else
     export SINGULARITY_FAKEROOT=1
-    docker_flag=''
+    docker_flag='-profile local -with-singularity'
 fi
 
 nextflow run "$script_dir"/.. \
