@@ -17,18 +17,17 @@ dependencies:
     - bioconda::stringtie
     - bioconda::subread
     - bioconda::umi_tools=1.1.6
-    - conda-forge::ca-certificates
     - conda-forge::git
     - conda-forge::gnuplot
     - conda-forge::libjpeg-turbo
     - conda-forge::openjdk
     - conda-forge::r-base
     - conda-forge::r-essentials
-    - conda-forge::wget
     - conda-forge::unzip
     - pip:
         - 'carabiner-tools[mpl,pd]>=0.0.4'
         - 'cutadapt>=5.0'
+        - 'deeptools==3.5.3'
         - 'multiqc>=1.27'
         - 'numpy>=2.1.3'
         - 'RSeQC'
