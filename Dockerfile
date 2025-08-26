@@ -26,7 +26,7 @@ RUN micromamba create -n env -f /tmp/environment.yml && \
 RUN mkdir -p /tmp/{xdg,fontconfig,mpl,numba}
 
 # force OS binaries to take precednt over mamba (curl issues)
-ENV PATH=$PATH:AMBA_ROOT_PREFIX/envs/env/bin
+ENV PATH=$PATH:$MAMBA_ROOT_PREFIX/envs/env/bin
 ENV MPLBACKEND=Agg
 ENV XDG_CACHE_HOME=/tmp/xdg
 ENV MPLCONFIGDIR=/tmp/mpl
