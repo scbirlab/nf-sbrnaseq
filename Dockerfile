@@ -16,6 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     gcc \
     g++ \
+    perl liburi-perl \
     && update-ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 USER 1000
