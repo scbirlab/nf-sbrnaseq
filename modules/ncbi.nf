@@ -15,11 +15,11 @@ process fetch_genome_from_NCBI {
    ACCESSIONS=\$(echo "${accession}" | tr '+' ' ')
    echo "\$ACCESSIONS"
    WEB_ROOT="https://api.ncbi.nlm.nih.gov/datasets/v2alpha/genome/accession"
-   WEB_TAIL="download?include_annotation_type=GENOME_FASTA&include_annotation_type=GENOME_GFF&include_annotation_type=SEQUENCE_REPORT&hydrated=FULLY_HYDRATED"
+   WEB_TAIL="download?include_annotation_type=GENOME_FASTA&include_annotation_type=GENOME_GFF&hydrated=FULLY_HYDRATED"
    for acc in \$ACCESSIONS
    do
-      curl -L "\$WEB_ROOT/\$acc/\$WEB_TAIL" \
-      > \$acc"_genome-out"
+      curl -v "\$WEB_ROOT/\$acc/\$WEB_TAIL" \
+         -o \$acc"_genome-out"
       unzip -o \$acc"_genome-out" "ncbi_dataset/data/\$acc/"{"\$acc"_*_genomic.fna,*.gff}
       mv ncbi_dataset/data/*/"\$acc"_*_genomic.fna \$acc.fna
       mv ncbi_dataset/data/*/*.gff \$acc.gff
