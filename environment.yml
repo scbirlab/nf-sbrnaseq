@@ -13,6 +13,7 @@ dependencies:
     - bioconda::minimap2
     - bioconda::perl-uri
     - bioconda::samtools
+    - bioconda::seqtk
     - bioconda::sra-tools
     - bioconda::star
     - bioconda::stringtie
@@ -23,6 +24,7 @@ dependencies:
     - conda-forge::libjpeg-turbo
     - conda-forge::openjdk
     - conda-forge::openssl
+    - conda-forge::pigz
     - conda-forge::r-base
     - conda-forge::r-essentials
     - conda-forge::unzip
