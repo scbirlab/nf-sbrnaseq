@@ -23,7 +23,7 @@ process bowtie2_index {
 process bowtie2_align {
 
    tag "${id}-${genome_acc}" 
-   label "big_mem"
+   label "big_cpu"
 
    errorStrategy 'retry'
    maxRetries 1

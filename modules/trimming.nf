@@ -4,7 +4,7 @@
 process trim_using_cutadapt {
 
    tag "${id}:q > ${trim_qual}:l > ${min_length}"
-   label "big_mem" 
+   label "big_cpu" 
    
    // errorStrategy 'retry'
    // maxRetries 1

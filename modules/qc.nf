@@ -2,7 +2,7 @@
 process fastQC {
 
    tag "${sample_id}"
-   label 'med_mem'
+   label 'big_cpu'
    
    input:
    tuple val( sample_id ), path ( reads )
