@@ -36,15 +36,24 @@ process plot_UMI_distributions {
       .query("~gene_biotype.isin(@biotype_blocklist)")  # very low representation, breaks histogram bins
    )
 
+   scattergrid_args = {
+      "df": df,
+      "grid_columns": ["umi_count", "read_count", "pseudobulk_read_count"],
+      "log": ["umi_count", "read_count", "pseudobulk_read_count"],
+   }
+
    fig, axes = scattergrid(
-      df,
-      grid_columns=["umi_count", "bulk_read_count"],
-      log=["umi_count", "bulk_read_count"],
+      **scattergrid_args,
       grouping=["gene_biotype"],
       aspect_ratio=1.25,
    )
-   #for ax in fig.axes:
-   #   ax.set(yscale="log")
+   figsaver(format="png")(
+      fig=fig,
+      name='umi-hist-by-biotype',
+      df=df,
+   )
+
+   fig, axes = scattergrid(**scattergrid_args)
    figsaver(format="png")(
       fig=fig,
       name='umi-hist',
@@ -56,7 +65,7 @@ process plot_UMI_distributions {
 }
 
 
-process plot_cells_per_gene_distribution {
+process plot_counts_per_gene {
 
    tag "${id}"
    label 'big_mem'
@@ -86,30 +95,44 @@ process plot_cells_per_gene_distribution {
          "${umi_table}", 
          sep='\\t',
       ) 
-      .groupby(["genome_accession", "gene_id"])
+      .groupby(["genome_accession", "chr", "gene_id", "pseudobulk_read_count"])
    )
+
    bc_counts = (
-      df[["cell_barcode"]]
-      .count()
+      df[["umi_count", "read_count"]]
+      .sum()
       .reset_index()
+      .rename(columns={
+         "umi_count": "umi_count_per_gene",
+         "read_count": "read_count_per_gene"
+      })
       .merge(
-         df[["umi_count", "bulk_read_count"]]
-         .sum()
+         df[["cell_barcode"]]
+         .nunique()
          .reset_index()
       )
-      .rename(columns={"cell_barcode": "cell_count"})
+      .rename(columns={
+         "cell_barcode": "cell_count_per_gene",
+      })
    )
+
+   cols = [
+      "pseudobulk_read_count", 
+      "umi_count_per_gene", 
+      "read_count_per_gene", 
+      "cell_count_per_gene",
+   ]
 
    fig, axes = scattergrid(
       bc_counts,
-      grid_columns=["umi_count", "bulk_read_count", "cell_count"],
-      log=["umi_count", "bulk_read_count", "cell_count"],
+      grid_columns=cols,
+      log=cols,
       grouping=["genome_accession"],
       aspect_ratio=1.25,
    )
    figsaver(format="png")(
       fig=fig,
-      name='umis-and-cells-per-gene',
+      name='counts-per-gene',
       df=bc_counts,
    )
 
@@ -118,7 +141,7 @@ process plot_cells_per_gene_distribution {
 }
 
 
-process plot_genes_per_cell_distribution {
+process plot_counts_per_cell {
 
    tag "${id}"
    label 'big_mem'
@@ -143,73 +166,48 @@ process plot_genes_per_cell_distribution {
    from carabiner.mpl import figsaver, scattergrid
    import pandas as pd
 
+   GENE_ID = [
+      "genome_accession", 
+      "chr",
+      "gene_id",
+   ]
+
    df = pd.read_csv(
       "${umi_table}", 
       sep='\\t',
+   )
+
+   count_cols = ["umi_count", "read_count"]
+   group_cols = GENE_ID + count_cols
+   renamer = {
+      col: f"{col}_per_cell" for col in group_cols
+   }
+   per_cell = (
+      df
+      .assign(
+         gene_id=lambda x: x[GENE_ID[0]].astype(str).str.cat(x[GENE_ID[1:]], sep=":"),
+      )
+      .groupby("cell_barcode")
+      [group_cols]
+      .agg({
+         "gene_id": "nunique",
+      } | {
+         col: "sum" for col in count_cols
+      })
+      .rename(columns=renamer)
+   )
+   fig, axes = scattergrid(
+      per_cell,
+      grid_columns=list(renamer.values()),
+      log=list(renamer.values()),
+      #grouping=["gene_biotype"] if using_biotype else None,
+      #aspect_ratio=1.25 if using_biotype else 1.,
+   )
+   figsaver(format="png")(
+      fig=fig,
+      name="counts-per-cell",
+      df=per_cell.reset_index(),
    ) 
-   renamer = {"gene_id": "gene_count"}
-
-   genes_per_cell = (
-      df
-      .groupby("cell_barcode")[["gene_id"]]
-      .count()
-      .reset_index()
-      .merge(
-         df
-         .groupby("cell_barcode")[["umi_count"]]
-         .sum()
-         .reset_index()
-      )
-      .rename(columns=renamer)
-      .sort_values("umi_count")
-   )
-
-   genes_per_biotype_per_cell = (
-      df
-      .groupby(["cell_barcode", "gene_biotype"])[["gene_id"]]
-      .count()
-      .reset_index()
-      .merge(
-         df
-         .groupby(["cell_barcode", "gene_biotype"])[["umi_count"]]
-         .sum()
-         .reset_index()
-      )
-      .rename(columns=renamer)
-      .sort_values("umi_count")
-   )
-
-   
-   for grouping in (
-      ["cell_barcode"],
-      ["cell_barcode", "gene_biotype"],
-   ):
-      grouped_df = df.groupby(grouping)
-      count_df = (
-         grouped_df[["gene_id"]]
-         .count()
-         .reset_index()
-         .merge(
-            grouped_df[["umi_count", "bulk_read_count"]]
-            .sum()
-            .reset_index()
-         )
-         .rename(columns=renamer)
-         .sort_values("umi_count")
-      )
-      using_biotype = "gene_biotype" in grouping
-      fig, axes = scattergrid(
-         count_df,
-         grid_columns=["umi_count", "bulk_read_count", "gene_count"],
-         log=["umi_count", "bulk_read_count", "gene_count"],
-         grouping=["gene_biotype"] if using_biotype else None,
-         aspect_ratio=1.25 if using_biotype else 1.,
-      )
-      figsaver(format="png")(
-         fig=fig,
-         name="-".join(grouping),
-         df=count_df,
-      )
 
    """
    
