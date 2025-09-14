@@ -38,12 +38,45 @@ process UMIcollapse {
 
    script:
    """
+   samtools view -h "${bamfile[1]}" \
+   | awk -F'\\t' -v OFS='\\t' '
+      /^@/ { print \$0; next }
+      !/^@/ {
+         delete a
+         split(\$1, a, "_"); 
+         \$1 = a[1] "_" a[2] "_" a[2] a[3]; 
+         print \$0, "CB:Z:" a[2];
+         next
+      }
+   ' \
+   | samtools view -h -bS -o "cb-prepended.bam"
+
+   samtools index "cb-prepended.bam"
    java -jar -Xmx${Math.round(task.memory.getGiga() * 0.8)}G -Xss1024m \
       ${umicollapse_repo}/umicollapse.jar bam \
       --paired \
       --tag \
-      -i ${bamfile[0]} \
-      -o ${id}.umicollapse.bam \
-   2>&1 > ${id}.umicollapse.log
+      -i "cb-prepended.bam" \
+      -o "${id}.umicollapse.bam" \
+   2>&1 > "${id}.umicollapse.log"
+
+   mv "${id}.umicollapse.bam" "${id}.umicollapse-prep.bam"
+   samtools view -h "${id}.umicollapse-prep.bam" \
+   | awk -F'\\t' -v OFS='\\t' '
+      /^@/ { print \$0; next }
+      !/^@/ {
+         delete a; a2l=""; a3l="";
+         split(\$1, a, "_"); 
+         a2l = length(a[2]);
+         a3l = length(a[3]);
+         \$1 = a[1] "_" a[2] "_" substr(a[3], a2l + 1, a3l - a2l); 
+         print \$0
+         next
+      }
+   ' \
+   | samtools view -h -bS -o "${id}.umicollapse.bam"
+
+   rm "cb-prepended.bam" "${id}.umicollapse-prep.bam"
+
    """
 }
