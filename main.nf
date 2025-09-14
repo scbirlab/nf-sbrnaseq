@@ -110,14 +110,19 @@ include {
 } from './modules/minimap.nf'
 include { 
    fetch_genome_from_NCBI; 
-   fetch_FASTQ_from_SRA;
+   prefetch_from_SRA;
+   download_FASTQ_from_SRA;
+   prepend_reads_with_barcodes;
 } from './modules/ncbi.nf'
 include { 
    plot_UMI_distributions;
-   plot_cells_per_gene_distribution; 
-   plot_genes_per_cell_distribution;
+   plot_counts_per_gene; 
+   plot_counts_per_cell;
 } from './modules/plots.nf'
-include { gene_body_coverage;  gff2bed; } from './modules/rseqc.nf'
+include { 
+   gene_body_coverage;  
+   gff2bed; 
+} from './modules/rseqc.nf'
 include { 
    STAR_index; 
    STAR_align;
@@ -132,7 +137,12 @@ include {
 } from './modules/umicollapse.nf'
 include { 
    UMItools_count;
-   UMItools_extract; 
+   UMItools_extract;
+   concat_extractions;
+   bam2table;
+   counts_per_gene;
+   counts_per_cell;
+   counts_per_gene_per_cell;
 } from './modules/umitools.nf'
 include { 
    remove_multimappers;
@@ -155,6 +165,7 @@ include { fastQC } from './modules/qc.nf'
 include { 
    add_errors_to_whitelist; 
    build_whitelist;
+   chunk_whitelist;
 } from './modules/whitelisting.nf'
 
 workflow {
@@ -185,7 +196,7 @@ workflow {
       csv_ch
          .map { tuple( 
             it.sample_id,
-            it.umi,
+            tuple( it.umi )
          ) }
          .set { umi_ch }  // sample_id, umi
 
@@ -199,6 +210,7 @@ workflow {
             tuple( it.adapter_read1_5prime, it.adapter_read2_5prime ),
             tuple( it.adapter_read1_3prime, it.adapter_read2_3prime ),
          ) }
+         .unique()
          .set { adapter_ch }  // sample_name, [adapt5], [adapt3] 
 
       csv_ch
@@ -206,6 +218,7 @@ workflow {
             it.sample_id,
             tuple( it.umi_read1, it.umi_read2 )
          ) }
+         .unique()
          .set { umi_ch }  // sample_id, [umis]
 
    }
@@ -229,11 +242,15 @@ workflow {
       .set { barcode_ch }  // sample_id, wl_id, [BCs]
 
    if ( params.from_sra ) {
-      Channel.of( params.ncbi_api_key ).set { ncbi_api_key }
       csv_ch
          .map { tuple( it.sample_id, it.Run ) }
-         | fetch_FASTQ_from_SRA
-         | set { reads_ch }  // sample_id, reads
+         | prefetch_from_SRA
+         | download_FASTQ_from_SRA
+         | prepend_reads_with_barcodes
+      prepend_reads_with_barcodes.out
+         .transpose()
+         .groupTuple( by: 0 )
+         .set { reads_ch }  // sample_id, [reads]
    } 
    
    else {
@@ -269,6 +286,7 @@ workflow {
       .map { it[1..0] }  // genome_acc, sample_id
       .combine( fetch_genome_from_NCBI.out, by: 0 )  // genome_acc, sample_id, genome, gff
       .map { tuple( it[1], it[-1] ) }  // sample_id, gff
+      .unique()
       .set { genome_gff }
 
    if ( !params.nanopore ) {
@@ -295,8 +313,8 @@ workflow {
    
    build_whitelist(
       barcode_ch
-      .map { it[1..2] }  // wl_id, [BCs]
-      .unique(),
+         .map { it[1..2] }  // wl_id, [BCs]
+         .unique(),
       Channel.value( params.reverse ),
    )
    
@@ -310,20 +328,35 @@ workflow {
    
    else {
    
-      build_whitelist.out.set { whitelist0 }
+      build_whitelist.out
+         | set { whitelist0 }
    
    }
 
    barcode_ch
       .map { it[1..0] }  // wl_id, sample_id
-      .combine( whitelist0, by: 0 )  // wl_id, sample_id, whitelist_err
+      .combine( 
+         chunk_whitelist(
+            whitelist0,
+            Channel.value( params.whitelist_chunk_size ),
+         ).transpose(), 
+         by: 0,
+       )  // wl_id, sample_id, whitelist_err
       .map { it[1..-1] }  // sample_id, whitelist_err
+      .unique()
       .set { whitelists }
 
    trimmed  // sample_id, [reads]
       .combine( umi_ch, by: 0 )  // sample_id, [reads], umis
       .combine( whitelists, by: 0 )  // sample_id, [reads], umis, whitelist
       | UMItools_extract  // sample_id, [reads]
+   UMItools_extract.out.main
+      .transpose()
+      .groupTuple( by: 0 )
+      .map { tuple( it[0], it[1].sort() ) }
+      .unique()
+      | concat_extractions
+      | set { extracted }
 
    if ( params.mapper == "star" ) {
       fetch_genome_from_NCBI.out
@@ -335,6 +368,7 @@ workflow {
 
       fetch_genome_from_NCBI.out
          .map { it[0..1] } 
+         .unique()
          | bowtie2_index
          | set { genome_idx0 }
 
@@ -344,7 +378,8 @@ workflow {
 
       minimap_index(
          fetch_genome_from_NCBI.out
-            .map { it[0..1] },
+            .map { it[0..1] }
+            .unique(),
          Channel.value( params.nanopore ),
 
       )
@@ -358,13 +393,16 @@ workflow {
 
    genome_idx0
       .combine( 
-         genome_ch.map { it[1..0] }, 
+         genome_ch
+            .map { it[1..0] }
+            .unique(), 
          by: 0,
       )  // genome_acc, [genome_idx], sample_id
       .map { it[-1..0] }  // sample_id, [genome_idx], genome_acc
+      .unique()
       .set { genome_idx }
 
-   UMItools_extract.out.main
+   extracted
       .combine( genome_idx, by: 0 )  // sample_id, [reads], [genome_idx], genome_acc
       .set { pre_mapper }
 
@@ -410,56 +448,53 @@ workflow {
 
    UMIcollapse.out.main
       .combine( genome_gff, by: 0 )  // sample_id, dedup_bam, gff
+      .unique()
       .set { collapsed }
 
    featurecounts(
       collapsed,
       Channel.value( !params.nanopore ),
+      Channel.value( params.strand ),
+      Channel.value( params.ann_type ),
+      Channel.value( params.label ),
    )
 
    collapsed
       .map { tuple( it[0], it[2] ) }
+      .unique()
       | gff2bed
 
    collapsed
       .map { tuple( it[0], it[1] ) }
+      .unique()
       .combine( 
          gff2bed.out,
          by: 0,
       )
       | gene_body_coverage
-   // collapsed.map { tuple( it[0], it[2] ) }
-   //    | (
-   //       gene_body_coverage
-   //       // & stringtie
-   //    ) 
+   
+   featurecounts.out.main
+   | bam2table
+   | (
+      counts_per_gene
+      & counts_per_cell
+      & counts_per_gene_per_cell
+   )
+   
+   // UMItools_count(
+   //    featurecounts.out.main,
+   //    Channel.value( !params.nanopore ),
+   // ) // sample_id, counts
 
-   // stringtie.out.transcripts
-   //    .combine( genome_ch, by: 0 )  // sample_id, gtf, genome_acc
-   //    .map { tuple( it[2], it[0], it[1] ) }  // genome_acc, sample_id, gtf
-   //    .groupTuple( by: 0 )   // genome_acc, [sample_id, ...], [gtf, ...]
-   //    .map { tuple( it[0], it[2] ) }
-   //    .combine( genome_gff, by: 0 )
-   //    | merge_stringtie
-
-   // UMIcollapse.out.main
-   //    .combine( merge_stringtie.out, by: 0 )  // sample_id, dedup_bam, gff
-   //    | stringtie_count
-
-   UMItools_count(
-      featurecounts.out.main,
-      Channel.value( !params.nanopore ),
-   ) // sample_id, counts
-
-   UMItools_count.out.main
+   counts_per_gene_per_cell.out
       .combine( featurecounts.out.table, by: 0 )  // sample_id, umitools_counts, featurecounts_counts
       | join_featurecounts_UMItools
    join_featurecounts_UMItools.out
       | ( 
          plot_UMI_distributions 
          & count_genomes_per_cell 
-         & plot_cells_per_gene_distribution
-         & plot_genes_per_cell_distribution
+         & plot_counts_per_gene
+         & plot_counts_per_cell
          & build_AnnData
       )
 
