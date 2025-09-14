@@ -26,6 +26,7 @@ process STAR_index {
       --sjdbGTFtagExonParentGene Parent \
       --sjdbGTFtagExonParentGeneName gene \
       --sjdbGTFtagExonParentGeneType gene_biotype
+
    """
 }
 
@@ -34,8 +35,8 @@ process STAR_index {
  */
 process STAR_align {
 
-   tag "${id}-${genome_acc}" 
-   label "big_mem"
+   tag "${id}:${genome_acc}" 
+   label "big_cpu"
    time "2d"
 
    // errorStrategy 'retry'
@@ -66,12 +67,14 @@ process STAR_align {
    STAR \
       --runMode alignReads \
       --runThreadN ${task.cpus} \
-      --genomeDir ${idx} \
+      --genomeDir "${idx}" \
       --readFilesIn ${reads} \
       --readFilesCommand zcat \
       --alignEndsType Local \
       --alignIntronMax 1 \
-      --outFilterMultimapNmax 1 \
+      --outFilterMultimapNmax 10 \
+      --outSAMmapqUnique 255 \
+      --outSAMprimaryFlag AllBestScore \
       --outSAMattributes All \
       --outSAMattrIHstart 0 \
       --twopassMode None \
