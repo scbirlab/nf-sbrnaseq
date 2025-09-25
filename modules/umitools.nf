@@ -104,13 +104,17 @@ process bam2table {
 
    input:
    tuple val( id ), path( bamfile )
+   val paired
 
    output:
    tuple val( id ), path( "tab.tsv" )
 
    script:
    """
-   samtools view -h -F3972 --tag 'XS:Assigned' "${bamfile}" -bS -o filtered.bam
+   samtools view -h -F${paired ? "1664 -f3" : "1536"} \
+      --tag 'XS:Assigned' \
+      "${bamfile}" \
+      -bS -o filtered.bam
 
    samtools view filtered.bam \
    | awk -F'\\t' -v OFS='\\t' '
@@ -139,7 +143,8 @@ process bam2table {
    """
 }
 
-process counts_per_gene {
+
+process counts_per_gene_awk {
 
    tag "${id}"
 
@@ -157,26 +162,78 @@ process counts_per_gene {
 
    script:
    """
-   #!/usr/bin/env python 
-
-   import pandas as pd
-
-   (
-      pd.read_csv("${tabfile}", sep="\\t")
-      .groupby(["chr", "gene_id"])
-      .agg({"umi": "nunique", "umi_read_count": "sum"})
-      .rename(columns={
-         "umi": "umi_count",
-         "umi_read_count": "read_count",
-      })
-      .to_csv("counts_per_gene.tsv", sep="\\t")
-   )
+   awk -F'\\t' -v OFS='\\t' '
+      BEGIN { print "chr", "gene_id", "umi_count", "read_count" } 
+      NR > 1 {
+         u1[\$3,\$2]++; 
+         r[\$3,\$2] += \$7 
+      } 
+      END { 
+         for (key in u) {
+            split( key, k, SUBSEP ); 
+            print k[1], k[2], u[key], r[key]
+         }
+      }
+   '  "${tabfile}" \
+   > "counts_per_gene.tsv"
 
    """
 }
 
 
-process counts_per_cell {
+process counts_per_gene {
+
+   tag "${id}"
+   label "big_mem"
+   cpus 1
+
+   publishDir( 
+      "${params.outputs}/counts", 
+      mode: 'copy',
+      saveAs: { "${id}.${it}" },
+   )
+
+   input:
+   tuple val( id ), path( tabfile )
+
+   output:
+   tuple val( id ), path( "counts_per_gene.tsv" )
+
+   script:
+   """
+   #!/usr/bin/env python
+   import pandas as pd
+
+   (
+      pd.read_csv(
+         "${tabfile}",
+         sep="\\t",
+      )
+      .groupby(["chr", "gene_id"])
+      .agg({
+         "umi": "nunique",
+         "umi_read_count": "sum",
+      })
+      .rename(columns={
+         "umi": "umi_count",
+         "umi_read_count": "read_count",
+      })
+      .rename(columns={
+         "umi": "umi_count",
+      })
+      .to_csv(
+         "counts_per_gene.tsv",
+         sep="\\t",
+         index=True,
+      )
+   )
+   
+   """
+}
+
+
+
+process counts_per_cell_awk {
 
    tag "${id}"
 
@@ -194,27 +251,74 @@ process counts_per_cell {
 
    script:
    """
-   #!/usr/bin/env python 
+   awk -F'\\t' -v OFS='\\t' '
+      BEGIN { print "cell_barcode", "umi_count", "read_count" } 
+      NR>1 { u[\$4]++; r[\$4] += \$7 } 
+      END { 
+         for (key in u) { 
+            print key, u[key], r[key]
+         }
+      }
+   '  "${tabfile}" \
+   > "counts_per_cell.tsv"
 
+   """
+}
+
+
+process counts_per_cell {
+
+   tag "${id}"
+   label "big_mem"
+   cpus 1
+
+   publishDir( 
+      "${params.outputs}/counts", 
+      mode: 'copy',
+      saveAs: { "${id}.${it}" },
+   )
+
+   input:
+   tuple val( id ), path( tabfile )
+
+   output:
+   tuple val( id ), path( "counts_per_cell.tsv" )
+
+   script:
+   """
+   #!/usr/bin/env python
    import pandas as pd
 
    (
-      pd.read_csv("${tabfile}", sep="\\t")
+      pd.read_csv(
+         "${tabfile}",
+         sep="\\t",
+      )
       .groupby("cell_barcode")
-      .agg({"umi": "nunique", "umi_read_count": "sum"})
+      .agg({
+         "umi": "nunique",
+         "umi_read_count": "sum",
+      })
       .rename(columns={
          "umi": "umi_count",
          "umi_read_count": "read_count",
       })
-      .to_csv("counts_per_cell.tsv", sep="\\t")
+      .to_csv(
+         "counts_per_cell.tsv",
+         sep="\\t",
+         index=True,
+      )
    )
 
    """
 }
 
-process counts_per_gene_per_cell {
+
+process counts_per_gene_per_cell_awk {
 
    tag "${id}"
+   label "big_mem"
+   cpus 1
 
    publishDir( 
       "${params.outputs}/counts", 
@@ -230,19 +334,66 @@ process counts_per_gene_per_cell {
 
    script:
    """
-   #!/usr/bin/env python 
+   awk -F'\\t' -v OFS='\\t' '
+      BEGIN { print "chr", "gene_id", "cell_barcode", "umi_count", "read_count" } 
+      NR > 1 && NF >= 7 && \$7 > 0 { u[\$3,\$2,\$4]++; r[\$3,\$2,\$4] += \$7 } 
+      END { 
+         for (key in u) {
+            if ( r[key] > 0) {
+               split( key, k, SUBSEP ); 
+               print k[1], k[2], k[3], u[key], r[key]
+            }
+         }
+      }
+   '  "${tabfile}" \
+   > "counts_per_gene_per_cell.tsv"
 
+   """
+}
+
+
+process counts_per_gene_per_cell {
+
+   tag "${id}"
+   label "big_mem"
+   cpus 1
+
+   publishDir( 
+      "${params.outputs}/counts", 
+      mode: 'copy',
+      saveAs: { "${id}.${it}" },
+   )
+
+   input:
+   tuple val( id ), path( tabfile )
+
+   output:
+   tuple val( id ), path( "counts_per_gene_per_cell.tsv" )
+
+   script:
+   """
+   #!/usr/bin/env python
    import pandas as pd
 
    (
-      pd.read_csv("${tabfile}", sep="\\t")
+      pd.read_csv(
+         "${tabfile}",
+         sep="\\t",
+      )
       .groupby(["chr", "gene_id", "cell_barcode"])
-      .agg({"umi": "nunique", "umi_read_count": "sum"})
+      .agg({
+         "umi": "nunique",
+         "umi_read_count": "sum",
+      })
       .rename(columns={
          "umi": "umi_count",
          "umi_read_count": "read_count",
       })
-      .to_csv("counts_per_gene_per_cell.tsv", sep="\\t")
+      .to_csv(
+         "counts_per_gene_per_cell.tsv",
+         sep="\\t",
+         index=True,
+      )
    )
 
    """
@@ -290,6 +441,7 @@ process UMItools_count_tab {
 
    """
 }
+
 
 /*
  * Count unique UMIs per cell per gene
