@@ -1,7 +1,8 @@
 process join_featurecounts_UMItools {
 
    tag "${id}"
-   label 'some_mem'
+   label 'big_mem'
+   cpus 1
 
    publishDir( 
       "${params.outputs}/counts", 
@@ -69,6 +70,7 @@ process join_featurecounts_UMItools {
 process count_genomes_per_cell {
 
    tag "${id}"
+   label "big_mem"
 
    publishDir( 
       "${params.outputs}/counts", 
@@ -82,7 +84,7 @@ process count_genomes_per_cell {
 
    output:
    tuple val( id ), path( "genome-per-cell{,-summary}.tsv" ), emit: chr_per_cell
-   tuple val( id ), path( "*.{png,tsv}" ), emit: plots
+   tuple val( id ), path( "*.{png,tsv}" ), emit: plots, optional: true
 
    script:
    """
@@ -94,7 +96,7 @@ process count_genomes_per_cell {
    GENOME_KEY = "genome_accession"
    CELL_BC_KEY = "cell_barcode"
 
-   df = pd.read_csv("${joined_table}", sep="\\t")#.query("gene_biotype != 'rRNA'")
+   df = pd.read_csv("${joined_table}", sep="\\t")#.query("not gene_biotype.isin(('rRNA', 'tRNA'))")
    n_genomes = df[GENOME_KEY].nunique()
 
    df_sum = (
@@ -123,39 +125,40 @@ process count_genomes_per_cell {
       .astype(int)
    )
    print(m.head())
-   m = m.loc[cell_sums.query("umi_count >= 2").index]
+   m = m.reindex(cell_sums.query("read_count >= 2").index)
    m.columns = [":".join(c) for c in m.columns.to_flat_index()]
    m.to_csv("genome-per-cell.tsv", sep="\\t")
 
-   fig, axes = scattergrid(
-      m,
-      grid_columns=m.columns.tolist(),
-      #log=m.columns.tolist(),
-   )
-   figsaver(format="png")(
-      fig=fig,
-      name="genome-per-cell",
-      df=m.reset_index(),
-   )
+   if len(m.shape) > 1 and m.shape[-1] > 0:
+      fig, axes = scattergrid(
+         m,
+         grid_columns=m.columns.tolist(),
+         #log=m.columns.tolist(),
+      )
+      figsaver(format="png")(
+         fig=fig,
+         name="genome-per-cell",
+         df=m.reset_index(),
+      )
 
-   df_hist = (
-      df_sum
-      .query("umi_count >= 2")
-      .groupby(CELL_BC_KEY)
-      [[GENOME_KEY]]
-      .nunique()
-      .reset_index()
-      .groupby(GENOME_KEY)
-      [[CELL_BC_KEY]]
-      .nunique()
-      .reset_index()
-      .rename(columns={
-         GENOME_KEY: "n_genomes_per_cell",
-         CELL_BC_KEY: "n_cells_with_n_genomes",
-      })
-   )
+      df_hist = (
+         df_sum
+         .query("read_count >= 2")
+         .groupby(CELL_BC_KEY)
+         [[GENOME_KEY]]
+         .nunique()
+         .reset_index()
+         .groupby(GENOME_KEY)
+         [[CELL_BC_KEY]]
+         .nunique()
+         .reset_index()
+         .rename(columns={
+            GENOME_KEY: "n_genomes_per_cell",
+            CELL_BC_KEY: "n_cells_with_n_genomes",
+         })
+      )
 
-   df_hist.to_csv("genome-per-cell-summary.tsv", sep="\\t", index=False)
+      df_hist.to_csv("genome-per-cell-summary.tsv", sep="\\t", index=False)
 
    """
 
