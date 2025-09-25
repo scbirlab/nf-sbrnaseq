@@ -102,6 +102,10 @@ include {
    join_featurecounts_UMItools;
    count_genomes_per_cell;
 } from './modules/count_utils.nf'
+include { 
+   bam2wig;
+   plot_peaks;
+} from './modules/deeptools.nf'
 include { featurecounts } from './modules/featurecounts.nf'
 include { multiQC } from './modules/multiqc.nf'
 include { 
@@ -408,8 +412,10 @@ workflow {
 
    if ( params.mapper == "star" ) {
 
-      pre_mapper
-         | STAR_align
+      STAR_align(
+         pre_mapper,
+         Channel.value( params.strand ),
+      )
          | set { mapped_reads }
 
    }
@@ -433,10 +439,12 @@ workflow {
 
    }
 
-   mapped_reads.main
-      | remove_multimappers
-      | combine( fetch_UMIcollapse.out )  // sample_id, [bam_bai], umicollapse_repo
-      | UMIcollapse  // sample_id, dedup_bam
+   UMIcollapse(
+      mapped_reads.main
+         | remove_multimappers
+         | combine( fetch_UMIcollapse.out ),
+      Channel.value( !params.unpaired ),
+   )
 
    UMIcollapse.out.main
       | (
@@ -453,10 +461,11 @@ workflow {
 
    featurecounts(
       collapsed,
-      Channel.value( !params.nanopore ),
+      Channel.value( params.nanopore ),
       Channel.value( params.strand ),
       Channel.value( params.ann_type ),
       Channel.value( params.label ),
+      Channel.value( params.unpaired ),
    )
 
    collapsed
@@ -467,14 +476,26 @@ workflow {
    collapsed
       .map { tuple( it[0], it[1] ) }
       .unique()
+      | bam2wig
+
+   bam2wig.out
+      .combine( gff2bed.out, by: 0 )
+      | plot_peaks
+
+   collapsed
+      .map { tuple( it[0], it[1] ) }
+      .unique()
       .combine( 
          gff2bed.out,
          by: 0,
       )
       | gene_body_coverage
    
-   featurecounts.out.main
-   | bam2table
+   bam2table(
+      featurecounts.out.main,
+      Channel.value( !(params.unpaired || params.nanopore) ),
+   )
+   bam2table.out
    | (
       counts_per_gene
       & counts_per_cell
