@@ -8,7 +8,7 @@ process featurecounts {
    tag "${id}"
    label 'big_cpu'
 
-   // errorStrategy 'retry'
+   // errorStrategy 'ignore'
    // maxRetries 2
 
    publishDir( 
@@ -19,15 +19,16 @@ process featurecounts {
 
    input:
    tuple val( id ), path( bamfile ), path( gff )
-   val paired
+   val nanopore
    val strand
    val annotation_type
    val attribute_label
+   val reverse_mate
 
    output:
    tuple val( id ), path( "*.bam" ), emit: main
    tuple val( id ), path( "*.featureCounts.tsv" ), emit: table
-   tuple val( id ), path( "species-chr-map.tsv" ), emit: mapping
+   tuple val( id ), path( "*.species-chr-map.tsv" ), emit: mapping
    path "*.{summary,log}", emit: logs
 
 
@@ -49,23 +50,25 @@ process featurecounts {
       END { for (chr in taxon) print taxon[chr], assem[chr], genom[chr], chr }
       ' \
       "${gff}" \
-   > species-chr-map.tsv
+   > "${id}".species-chr-map.tsv
 
-   samtools index "${bamfile}"
+   samtools view -h ${reverse_mate ? "-f128" : ""} \
+      "${bamfile}" -o input.bam
+   samtools index "input.bam"
    featureCounts \
-      -C \
       -s ${strand ? strand : "0"} \
       -t ${annotation_type} \
       -g ${attribute_label} \
       -a "${gff}" \
-      -R BAM \
-      -T ${task.cpus} ${paired ? '--countReadPairs -p' : ''} \
+      ${nanopore ? "-L" : "-p"} ${(reverse_mate || nanopore) ? "-M" : "-B -C --countReadPairs"} -R BAM \
+      -T ${task.cpus} \
       --verbose \
       --extraAttributes ID,Name,gene_biotype,locus_tag \
       -o "featureCounts0.tsv" \
-      "${bamfile}"
+      "input.bam"
    mv "featureCounts0.tsv.summary" "featureCounts.tsv.summary"
    cp "featureCounts.tsv.summary" "${id}.featureCounts.log"
+   rm input.bam
 
    python -c '
    import pandas as pd
@@ -77,7 +80,7 @@ process featurecounts {
          comment="#",
       )
       .merge(
-         pd.read_csv("species-chr-map.tsv", sep="\\t")
+         pd.read_csv("${id}.species-chr-map.tsv", sep="\\t")
       )
       .to_csv("${id}.featureCounts.tsv", sep="\\t", index=False)
    )
