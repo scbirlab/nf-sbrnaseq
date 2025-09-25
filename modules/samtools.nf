@@ -26,6 +26,8 @@ process plot_bamstats {
 
     tag "${id}"
 
+    errorStrategy 'ignore'
+
     publishDir( 
         "${params.outputs}/samtools", 
         mode: 'copy',
@@ -44,7 +46,6 @@ process plot_bamstats {
     """
 
 }
-
 
 
 process SAMtools_flagstat {
@@ -119,11 +120,12 @@ process remove_multimappers {
     script:
     """
     # filter out multimappers
-    #samtools view -@ ${task.cpus} -F2308 -bS --min-MQ 1 "${bamfile}" -o filtered.bam
-    samtools view -@ ${task.cpus} -bS --min-MQ 1 "${bamfile}" -o filtered.bam
-    samtools sort -@ ${task.cpus} -m ${Math.round(task.memory.getGiga() * 0.8)}G filtered.bam -o "${id}.sorted.bam"
+    #samtools view -@ ${task.cpus} -F2308 -bS --min-MQ=1 "${bamfile}" -o filtered.bam
+    samtools view -@ ${task.cpus} -bS "${bamfile}" -o filtered.bam
+    samtools sort -@ ${task.cpus} -m 2G filtered.bam -o "${id}.sorted.bam"
     samtools index "${id}.sorted.bam" -o "${id}.sorted.bai"
     rm filtered.bam
+    
     """
 
 }

@@ -14,7 +14,7 @@ process build_AnnData {
    output:
    tuple val( id ), path( "*.h5ad" ), emit: main
    tuple val( id ), path( "*.{png,csv}" ), emit: plots
-   path "*.log", emit: logs
+   path "build.log", emit: logs
 
    script:
    """
@@ -22,7 +22,7 @@ process build_AnnData {
    export NUMBA_CACHE_DIR="numba"
    mkdir "\$MPLCONFIGDIR" "\$NUMBA_CACHE_DIR"
 
-   python ${projectDir}/bin/anndata-utils.py build "${counts_table}" --id "${id}" -o "build" 2> build.log
+   python ${projectDir}/bin/anndata-utils.py build "${counts_table}" --id "${id}" -o "build"  2> >(tee build.log)
 
    """
 }
@@ -51,7 +51,8 @@ process filter_AnnData {
    export NUMBA_CACHE_DIR="numba"
    mkdir "\$MPLCONFIGDIR" "\$NUMBA_CACHE_DIR"
 
-   python ${projectDir}/bin/anndata-utils.py filter "${anndata}" -o filter 2> filter.log
+   python ${projectDir}/bin/anndata-utils.py filter "${anndata}" -o filter 2> >(tee filter.log)
+
 
    """
 }
@@ -81,7 +82,8 @@ process cluster_cells {
    export NUMBA_CACHE_DIR="numba"
    mkdir "\$MPLCONFIGDIR" "\$NUMBA_CACHE_DIR"
 
-   python ${projectDir}/bin/anndata-utils.py cluster "${anndata}" -o cluster 2> cluster.log
+   python ${projectDir}/bin/anndata-utils.py cluster "${anndata}" -o cluster 2> >(tee cluster.log)
+
    mv figures/*.png .
    
    """

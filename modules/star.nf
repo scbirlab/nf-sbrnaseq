@@ -45,8 +45,14 @@ process STAR_align {
    publishDir( 
       "${params.outputs}/mapped", 
       mode: 'copy',
-      saveAs: { "${id}.${it}" },
+      saveAs: { "${id}.star.bam" },
       pattern: "*.bam"
+   )
+   publishDir( 
+      "${params.outputs}/mapped", 
+      mode: 'copy',
+      saveAs: { "${id}.${it}" },
+      pattern: "*.{bg,tab}"
    )
    publishDir( 
       "${params.outputs}/mapped", 
@@ -57,9 +63,11 @@ process STAR_align {
 
    input:
    tuple val( id ), path( reads ), path( idx ), val( genome_acc )
+   val strand
 
    output:
-   tuple val( id ), path( "Aligned.out.bam" ), emit: main
+   tuple val( id ), path( "Aligned*.out.bam" ), emit: main
+   tuple val( id ), path( "*.bg" ), emit: bg
    path "Log.final.out", emit: logs
 
    script:
@@ -72,14 +80,16 @@ process STAR_align {
       --readFilesCommand zcat \
       --alignEndsType Local \
       --alignIntronMax 1 \
-      --outFilterMultimapNmax 10 \
-      --outSAMmapqUnique 255 \
+      --outFilterMultimapNmax 20 \
       --outSAMprimaryFlag AllBestScore \
-      --outSAMattributes All \
+      --outSAMattributes NH HI NM MD AS nM \
       --outSAMattrIHstart 0 \
       --twopassMode None \
       --quantMode GeneCounts \
-      --outSAMtype BAM Unsorted
-
+      --outWigType bedGraph read1_5p \
+      --outSAMtype BAM SortedByCoordinate \
+      --outBAMsortingThreadN ${task.cpus} \
+      --limitBAMsortRAM ${Math.round(task.memory.getBytes() * 0.8)}
+   
    """
 }

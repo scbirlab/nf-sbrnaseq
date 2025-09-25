@@ -58,11 +58,12 @@ process trim_using_cutadapt {
          -j ${task.cpus} \
          -o ${id}_R1.with-adapters.fastq.gz \
          -p ${id}_R2.with-adapters.fastq.gz \
-         ${id}_5p_R?.fastq.gz > ${id}.5p.cutadapt.log
+         ${id}_5p_R?.fastq.gz \
+         > ${id}.5p.cutadapt.log
    else
       for i in \$(seq 1 2)
       do
-         mv ${id}_5p_R\$i.fastq.gz ${id}_R\$i.with-adapters.fastq.gz
+         cp ${id}_5p_R\$i.fastq.gz ${id}_R\$i.with-adapters.fastq.gz
       done
    fi
 
