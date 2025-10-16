@@ -4,7 +4,7 @@
 process trim_using_cutadapt {
 
    tag "${id}:q > ${trim_qual}:l > ${min_length}"
-   label "big_mem" 
+   label "big_cpu" 
    
    // errorStrategy 'retry'
    // maxRetries 1
@@ -15,7 +15,7 @@ process trim_using_cutadapt {
    )
 
    input:
-   tuple val( id ), path( reads, stageAs: "?/*" ), val( adapters5 ), val( adapters3 )
+   tuple val( id ), path( reads, stageAs: "???/*" ), val( adapters5 ), val( adapters3 )
    tuple val( trim_qual ), val( min_length )
 
    output:
@@ -29,7 +29,7 @@ process trim_using_cutadapt {
    """
    for i in \$(seq 1 2)
    do
-      cat */*_R"\$i"*.fastq.gz > ${id}_3p_R"\$i".fastq.gz
+      cat ???/*_R"\$i"*.fastq.gz > ${id}_3p_R"\$i".fastq.gz
    done
 
    cutadapt \
@@ -58,11 +58,12 @@ process trim_using_cutadapt {
          -j ${task.cpus} \
          -o ${id}_R1.with-adapters.fastq.gz \
          -p ${id}_R2.with-adapters.fastq.gz \
-         ${id}_5p_R?.fastq.gz > ${id}.5p.cutadapt.log
+         ${id}_5p_R?.fastq.gz \
+         > ${id}.5p.cutadapt.log
    else
       for i in \$(seq 1 2)
       do
-         mv ${id}_5p_R\$i.fastq.gz ${id}_R\$i.with-adapters.fastq.gz
+         cp ${id}_5p_R\$i.fastq.gz ${id}_R\$i.with-adapters.fastq.gz
       done
    fi
 

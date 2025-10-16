@@ -17,6 +17,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
     perl liburi-perl \
+    zlib1g-dev \
     && update-ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 USER 1000

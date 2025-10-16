@@ -110,7 +110,7 @@ Each time you run the pipeline after the first time, Nextflow will use a locally
 the pipeline, use the `-r <version>` flag. For example,
 
 ```bash 
-nextflow run scbirlab/nf-sbrnaseq -r v0.0.11
+nextflow run scbirlab/nf-sbrnaseq -r v0.0.12
 ```
 
 A list of versions can be found by running `nextflow info scbirlab/nf-sbrnaseq`.

@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+
+"""Ultilities for building AnnData objects and basic clustering analysis."""
+
 from typing import Callable
 
 from argparse import Namespace, FileType
@@ -17,7 +20,7 @@ from scipy.sparse import csr_matrix, coo_matrix
 from pandas.api.types import CategoricalDtype
 
 CELL_ID = ["cell_barcode"]
-GENE_ID = ["genome_accession", "gene_id"]
+GENE_ID = ["genome_accession", "assembly", "chr", "gene_id"]
 UMI_COUNT_COLUMN = "umi_count"
 MIN_COUNTS_PER_CELL = 60
 MIN_CELLS_PER_GENE = 3
@@ -26,31 +29,31 @@ MIN_CELLS_TO_KEEP = 950
 
 __version__ = "0.0.1"
 
+def _joiner(col: str, char: str = ":"):
+    def f(df: pd.DataFrame) -> pd.Series:
+        return df[col].astype(str).apply(
+            char.join, 
+            raw=True, 
+            axis=1, 
+            result_type="reduce",
+        )
+    return f
+
+
 def make_anndata_from_table(counts_table: str) -> pd.DataFrame:
 
-    def _joiner(col: str, char: str = "-"):
-        def f(df: pd.DataFrame) -> pd.Series:
-            return df[col].apply(
-                char.join, 
-                raw=True, 
-                axis=1, 
-                result_type="reduce",
-            )
-        return f
-    
     df = (
         pd.read_csv(
             counts_table, 
             sep="\t", 
             low_memory=False,
         )
+        .query(f"{UMI_COUNT_COLUMN} > 0")
         .assign(**{
             "__cell_id__": _joiner(CELL_ID),
             "__gene_id__": _joiner(GENE_ID),
         })
     )
-    
-    print_err(df)
     
     cell_cat = CategoricalDtype(sorted(df["__cell_id__"].unique()), ordered=True)
     gene_cat = CategoricalDtype(sorted(df["__gene_id__"].unique()), ordered=True)
@@ -64,11 +67,27 @@ def make_anndata_from_table(counts_table: str) -> pd.DataFrame:
         ),
         shape=(cell_cat.categories.size, gene_cat.categories.size),
     ).tocsr()
-    return df, pd.DataFrame.sparse.from_spmatrix(
+
+    matrix_df = pd.DataFrame.sparse.from_spmatrix(
         matrix,
         index=cell_cat.categories,
         columns=gene_cat.categories,
     )
+    adata = ad.AnnData(matrix_df)
+    adata.obs_names = matrix_df.index
+    adata.var_names = matrix_df.columns
+
+    print_err("shape:", matrix_df.shape)
+    print_err("dup genes?:", matrix_df.index.duplicated().any())
+    print_err("n dup genes:", matrix_df.index.duplicated().sum())
+
+    print_err("dup cells?:", matrix_df.columns.duplicated().any())
+    print_err("n dup cells:", matrix_df.columns.duplicated().sum())
+
+    print_err("var has duplicates?:", adata.var_names.duplicated().any())
+    print_err("obs has duplicates?:", adata.obs_names.duplicated().any())
+
+    return df, adata
 
 
 def save_anndata(x, filename: str, printf: Callable = print) -> None:
@@ -81,7 +100,7 @@ def save_anndata(x, filename: str, printf: Callable = print) -> None:
 def plot_barnyard(
     adata,
     filename: str,
-    grouping="genome_accession",
+    grouping: str = "genome_accession",
     plot_format: str = "png"
 ):
     _figsaver = figsaver(format=plot_format)
@@ -117,30 +136,36 @@ def _build(args: Namespace) -> None:
 
     _figsaver = figsaver(format=args.plot_format)
     print_err(f"Loading file {args.input} as a sparse matrix...")
-    count_df, matrix_df = make_anndata_from_table(args.input)
-
-    adata = ad.AnnData(matrix_df)
-    adata.obs_names = matrix_df.index
-    adata.var_names = matrix_df.columns
+    count_df, adata = make_anndata_from_table(args.input)
     adata.obs["sample_id"] = args.id
+
+    print_err(count_df)
+    print_err(adata)
 
     print_err("Annotating gene features...")
     gene_ann_columns = GENE_ID + [
-        "Chr", 
         "locus_tag", 
         "Name", 
-        "gene_biotype", 
-        "bulk_read_count", 
+        "gene_biotype",
         "Length",
+        "pseudobulk_read_count",
     ]
     gene_ann_df = (
         count_df[["__gene_id__"] + gene_ann_columns]
         .drop_duplicates()
         .set_index("__gene_id__")
     )
-    gene_ann_df = gene_ann_df.loc[adata.var_names,:]
-    for col in gene_ann_columns:
-        adata.var[col.casefold()] = gene_ann_df[col]
+    print_err(gene_ann_df.shape, sorted(gene_ann_df.columns))
+    gene_ann_df = gene_ann_df.reindex(adata.var.index)
+    print_err(gene_ann_df)
+    print_err(adata.var)
+    print_err(sorted(set(adata.var.index) - set(gene_ann_df.index)))
+    d = {idx: len([idx2 for idx2 in gene_ann_df.index if idx2==idx]) for idx in gene_ann_df.index}
+    print_err(d)
+    print_err(sorted(d, key=lambda x: d[x]))
+    adata.var = adata.var.join(gene_ann_df, how="left")
+    # for col in gene_ann_columns:
+    #     adata.var[col.casefold()] = gene_ann_df[col]
 
     all_biotypes = adata.var["gene_biotype"].unique()
     biotype_flags = []
@@ -202,10 +227,12 @@ def _build(args: Namespace) -> None:
             "total_counts", 
             "length", 
             "pct_dropout_by_counts",
+            "pseudobulk_read_count",
         ],
         log=[
             "n_cells_by_counts", 
             "total_counts",
+            "pseudobulk_read_count",
         ],
         grouping="genome_accession",
         aspect_ratio=1.25,
@@ -329,11 +356,15 @@ def _cluster(args: Namespace) -> None:
         "predicted_doublet",
         "leiden",
         "tRNA_rRNA_ratio",
+        "pseudobulk_read_count",
     ] + [
         c for c in adata.obs if c.startswith("pct_counts_")
     ]
     colors_to_plot = [c for c in colors_to_plot if c in adata.obs]
-    log_colors = [c for c in colors_to_plot if c.endswith("_counts")] + ["tRNA_rRNA_ratio"]
+    log_colors = [c for c in colors_to_plot if c.endswith("_counts")] + [
+        "tRNA_rRNA_ratio", 
+        "pseudobulk_read_count",
+    ]
 
     print_err("Making UMAP plots...")
     fig, axes = grid(

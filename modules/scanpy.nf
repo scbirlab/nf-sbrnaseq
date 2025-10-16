@@ -2,6 +2,8 @@ process build_AnnData {
    tag "${id}"
    label "big_mem"
 
+   errorStrategy 'ignore'
+
    publishDir( 
       "${params.outputs}/scanpy", 
       mode: 'copy',
@@ -14,20 +16,16 @@ process build_AnnData {
    output:
    tuple val( id ), path( "*.h5ad" ), emit: main
    tuple val( id ), path( "*.{png,csv}" ), emit: plots
-   path "*.log", emit: logs
+   path "build.log", emit: logs
 
    script:
    """
-   SCR="\$PWD/.scratch"
-   mkdir -p "\$SCR" "\$SCR/mpl" "\$SCR/xdg/fontconfig" "\$SCR/numba" "\$SCR/home" build
+   export MPLCONFIGDIR="mpl"
+   export NUMBA_CACHE_DIR="numba"
+   mkdir "\$MPLCONFIGDIR" "\$NUMBA_CACHE_DIR"
 
-   export HOME="\$SCR/home"
-   export MPLBACKEND=Agg
-   export MPLCONFIGDIR="\$SCR/mpl"
-   export XDG_CACHE_HOME="\$SCR/xdg"
-   export NUMBA_CACHE_DIR="\$SCR/numba"
+   python ${projectDir}/bin/anndata-utils.py build "${counts_table}" --id "${id}" -o "build"  2> >(tee build.log)
 
-   python ${projectDir}/bin/anndata-utils.py build "${counts_table}" --id "${id}" -o "build" 2> build.log
    """
 }
 
@@ -51,16 +49,13 @@ process filter_AnnData {
 
    script:
    """
-   SCR="\$PWD/.scratch"
-   mkdir -p "\$SCR" "\$SCR/mpl" "\$SCR/xdg/fontconfig" "\$SCR/numba" "\$SCR/home" build
+   export MPLCONFIGDIR="mpl"
+   export NUMBA_CACHE_DIR="numba"
+   mkdir "\$MPLCONFIGDIR" "\$NUMBA_CACHE_DIR"
 
-   export HOME="\$SCR/home"
-   export MPLBACKEND=Agg
-   export MPLCONFIGDIR="\$SCR/mpl"
-   export XDG_CACHE_HOME="\$SCR/xdg"
-   export NUMBA_CACHE_DIR="\$SCR/numba"
+   python ${projectDir}/bin/anndata-utils.py filter "${anndata}" -o filter 2> >(tee filter.log)
 
-   python ${projectDir}/bin/anndata-utils.py filter "${anndata}" -o filter 2> filter.log
+
    """
 }
 
@@ -69,6 +64,8 @@ process cluster_cells {
 
    tag "${id}"
    label "med_mem"
+
+   errorStrategy 'ignore'
 
    publishDir( 
       "${params.outputs}/clustering", 
@@ -85,16 +82,13 @@ process cluster_cells {
 
    script:
    """
-   SCR="\$PWD/.scratch"
-   mkdir -p "\$SCR" "\$SCR/mpl" "\$SCR/xdg/fontconfig" "\$SCR/numba" "\$SCR/home" build
+   export MPLCONFIGDIR="mpl"
+   export NUMBA_CACHE_DIR="numba"
+   mkdir "\$MPLCONFIGDIR" "\$NUMBA_CACHE_DIR"
 
-   export HOME="\$SCR/home"
-   export MPLBACKEND=Agg
-   export MPLCONFIGDIR="\$SCR/mpl"
-   export XDG_CACHE_HOME="\$SCR/xdg"
-   export NUMBA_CACHE_DIR="\$SCR/numba"
+   python ${projectDir}/bin/anndata-utils.py cluster "${anndata}" -o cluster 2> >(tee cluster.log)
 
-   python ${projectDir}/bin/anndata-utils.py cluster "${anndata}" -o cluster 2> cluster.log
    mv figures/*.png .
+   
    """
 }

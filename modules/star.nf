@@ -26,6 +26,7 @@ process STAR_index {
       --sjdbGTFtagExonParentGene Parent \
       --sjdbGTFtagExonParentGeneName gene \
       --sjdbGTFtagExonParentGeneType gene_biotype
+
    """
 }
 
@@ -34,8 +35,8 @@ process STAR_index {
  */
 process STAR_align {
 
-   tag "${id}-${genome_acc}" 
-   label "big_mem"
+   tag "${id}:${genome_acc}" 
+   label "big_cpu"
    time "2d"
 
    // errorStrategy 'retry'
@@ -44,39 +45,61 @@ process STAR_align {
    publishDir( 
       "${params.outputs}/mapped", 
       mode: 'copy',
-      saveAs: { "${id}.${it}" },
+      // saveAs: { "${id}.star.bam" },
       pattern: "*.bam"
    )
    publishDir( 
       "${params.outputs}/mapped", 
       mode: 'copy',
-      saveAs: { "${id}.star.log" },
+      // saveAs: { "${id}.${it}" },
+      pattern: "*.{bg,tab}"
+   )
+   publishDir( 
+      "${params.outputs}/mapped", 
+      mode: 'copy',
+      // saveAs: { "${id}.star.log" },
       pattern: "Log.final.out"
    )
 
    input:
    tuple val( id ), path( reads ), path( idx ), val( genome_acc )
+   val strand
 
    output:
-   tuple val( id ), path( "Aligned.out.bam" ), emit: main
-   path "Log.final.out", emit: logs
+   tuple val( id ), path( "${id}.star.bam" ), emit: main
+   tuple val( id ), path( "*.star.bg" ), emit: bg
+   tuple val( id ), path( "*.star.tab" ), emit: tab
+   path "${id}.star.log", emit: logs
 
    script:
    """
    STAR \
       --runMode alignReads \
       --runThreadN ${task.cpus} \
-      --genomeDir ${idx} \
+      --genomeDir "${idx}" \
       --readFilesIn ${reads} \
       --readFilesCommand zcat \
       --alignEndsType Local \
       --alignIntronMax 1 \
-      --outFilterMultimapNmax 1 \
-      --outSAMattributes All \
+      --outFilterMultimapNmax 20 \
+      --outSAMprimaryFlag AllBestScore \
+      --outSAMattributes NH HI NM MD AS nM \
       --outSAMattrIHstart 0 \
       --twopassMode None \
       --quantMode GeneCounts \
-      --outSAMtype BAM Unsorted
+      --outWigType bedGraph read1_5p \
+      --outSAMtype BAM SortedByCoordinate \
+      --outBAMsortingThreadN ${task.cpus} \
+      --limitBAMsortRAM ${Math.round(task.memory.getBytes() * 0.8)}
 
+   mv "Aligned.sortedByCoord.out.bam" "${id}.star.bam"
+   mv "Log.final.out" "${id}.star.log"
+   mv ReadsPerGene.out.tab "${id}.star.tab"
+
+   for f in *.bg
+   do
+      mv "\$f" "\$(basename \$f .bg)".star.bg
+   done
+   
    """
 }

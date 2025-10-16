@@ -6,66 +6,86 @@
 process featurecounts {
 
    tag "${id}"
-   label 'med_mem'
+   label 'big_cpu'
 
-   errorStrategy 'retry'
-   maxRetries 2
+   errorStrategy 'ignore'
+   // maxRetries 2
 
    publishDir( 
       "${params.outputs}/featurecounts", 
       mode: 'copy',
-      pattern: "*.log",
+      // pattern: "*.log",
    )
 
    input:
    tuple val( id ), path( bamfile ), path( gff )
-   val paired
+   val nanopore
+   val strand
+   val annotation_type
+   val attribute_label
+   val reverse_mate
 
    output:
    tuple val( id ), path( "*.bam" ), emit: main
    tuple val( id ), path( "*.featureCounts.tsv" ), emit: table
+   tuple val( id ), path( "*.species-chr-map.tsv" ), emit: mapping
    path "*.{summary,log}", emit: logs
+
 
    script:
    """
    # make species -> chromosome mapping
-   cat \
-      <(printf 'genome_accession\\tChr\\n') \
-      <(awk -v OFS='\\t' \
-         '
-         /^#!genome-build-accession/ { split(\$2, _species, ":"); species = _species[2] } 
-         !/#/ { if (!(\$1 in chr)) chr[\$1] = species } 
-         END { for (key in chr) print chr[key], key}
-         ' \
-         "${gff}" \
-      | sort -k2) \
-   > species-chr-map.tsv
+   awk -F'\\t' -v OFS='\\t' '
+      BEGIN { print "taxon_url", "assembly", "genome_accession", "Chr" }
+      /^#!genome-build / { split(\$1, _assembly, " "); assembly = _assembly[2]; next } 
+      /^#!genome-build-accession / { split(\$1, _acc0, " "); split(_acc0[2], _acc, ":"); acc = _acc[2]; next }
+      /^##species / { split(\$1, _url, " "); taxon_url = _url[2]; next }
+      !/#/ { chr = \$1; if (!(chr in taxon)) {
+            taxon[chr] = taxon_url;
+            assem[chr] = assembly;
+            genom[chr] = acc;
+         }
+         next
+      } 
+      END { for (chr in taxon) print taxon[chr], assem[chr], genom[chr], chr }
+      ' \
+      "${gff}" \
+   > "${id}".species-chr-map.tsv
 
-   samtools index "${bamfile}"
+   samtools view -h ${reverse_mate ? "-f128" : ""} \
+      "${bamfile}" -o "${id}.bam"
+   samtools index "${id}.bam"
    featureCounts \
-      -C \
-      -s ${params.strand} \
-      -t ${params.ann_type} \
-      -g ${params.label} \
+      -s ${strand ? strand : "0"} \
+      -t ${annotation_type} \
+      -g ${attribute_label} \
       -a "${gff}" \
-      -R BAM \
-      -T ${task.cpus} ${paired ? '--countReadPairs -p' : ''} \
+      ${nanopore ? "-L" : "-p"} ${(reverse_mate || nanopore) ? "" : "-B -C --countReadPairs"} -R BAM \
+      -T ${task.cpus} \
+      -M \
       --verbose \
-      --extraAttributes Name,gene_biotype,locus_tag \
+      --extraAttributes ID,Name,gene_biotype,locus_tag \
       -o "${id}.featureCounts0.tsv" \
-      "${bamfile}"
+      "${id}.bam"
    mv "${id}.featureCounts0.tsv.summary" "${id}.featureCounts.tsv.summary"
    cp "${id}.featureCounts.tsv.summary" "${id}.featureCounts.log"
+   rm "${id}.bam"
 
-   cat \
-      <(head -n1 "${id}.featureCounts0.tsv") \
-      <(
-         cat \
-            <(head -n2 "${id}.featureCounts0.tsv" | tail -n1) \
-            <(tail -n+3 "${id}.featureCounts0.tsv" | sort -k2) \
-         | join species-chr-map.tsv - -j2 --header -t\$'\\t'
-      ) \
-   > "${id}.featureCounts.tsv"
+   python -c '
+   import pandas as pd
+
+   (
+      pd.read_csv(
+         "${id}.featureCounts0.tsv",
+         sep="\\t",
+         comment="#",
+      )
+      .merge(
+         pd.read_csv("${id}.species-chr-map.tsv", sep="\\t")
+      )
+      .to_csv("${id}.featureCounts.tsv", sep="\\t", index=False)
+   )
+   '
    
    """
 }

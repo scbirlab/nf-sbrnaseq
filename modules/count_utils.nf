@@ -1,7 +1,8 @@
 process join_featurecounts_UMItools {
 
    tag "${id}"
-   label 'some_mem'
+   label 'big_mem'
+   cpus 1
 
    publishDir( 
       "${params.outputs}/counts", 
@@ -17,52 +18,65 @@ process join_featurecounts_UMItools {
 
    script:
    """
-   get_col_number () (
-      local col="\$1"
-      local sep=\${2:-,}
-      head -n1 | tr "\$sep" \$'\\n' | grep -n "\$col" | cut -d: -f1
-   )
-   sort_table () (
-      local col=\${1:-"1"}
-      cat > "temp-table"
-      head -n1 "temp-table" \
-      | cat - <(tail -n+2 "temp-table" \
-      | LC_ALL=C sort -k"\$col" -d -t, --parallel=${task.cpus} --buffer-size="${task.memory.getBytes()}b") && rm "temp-table"
-   )
-   set -x
-   grep -v '^#' "${featurecounts_table}" | tr \$'\\t' , > "featurecounts-table0.csv"
-   LOCUS_TAG_COL=\$(get_col_number "Geneid" < "featurecounts-table0.csv")
-   # rename header, add locus tag column, and sort
-   sed 's/,${id}.*\\.umicollapse\\.bam\$/,bulk_read_count/' \
-      "featurecounts-table0.csv" \
-   | awk -F, -v OFS=, \
-      -v locus_col="\$LOCUS_TAG_COL" -v sample_id="${id}" \
-      'NR == 1 { print "gene_id", "sample_id", \$0 } NR > 1 { print \$locus_col, sample_id, \$0 } ' \
-   | sort_table \
-   > "featurecounts-table.csv"
+   #!/usr/bin/env python
 
-   cat ${umitools_table} | tr \$'\\t' , > "umitools-table0.csv"
-   sed 's/,count\$/,umi_count/;s/^gene,/gene_id,/;s/,cell,/,cell_barcode,/' \
-      "umitools-table0.csv" \
-   | sort_table \
-   > "umitools-table.csv"
+   import pandas as pd
 
-   LC_COLLATE=C join --header -j1 -t, --nocheck-order \
-      "featurecounts-table.csv" "umitools-table.csv" \
-   | tr , \$'\t' \
-   > "all-counts.tsv" 
+   featurecounts_df = (
+      pd.read_csv("${featurecounts_table}", sep="\\t", comment='#')
+      .rename(columns={"Chr": "chr"})
+      .assign(
+         sample_id="${id}",
+         gene_id=lambda x: x["Geneid"],
+      )
+   )
+
+   bam_cols = [col for col in featurecounts_df if col.endswith(".bam")]
+   featurecounts_df = featurecounts_df.rename(
+      columns={col: "pseudobulk_read_count" for col in bam_cols}
+   )
+
+   df_in = (
+      pd.read_csv("${umitools_table}", sep="\\t")
+      .assign(
+         sample_id="${id}",
+      )
+   )
+
+   df_out = (
+      featurecounts_df
+      .merge(
+         df_in,
+         how="outer",
+      )
+      .drop_duplicates()
+      .assign(
+         umi_count=lambda x: x["umi_count"].fillna(0).astype(int),
+         read_count=lambda x: x["read_count"].fillna(0).astype(int),
+      )
+   )
+
+   #if df_out.shape[0] != df_in.shape[0]:
+   #   raise ValueError(
+   #      f"Extra rows were added! {df_in.shape[0]=} -> {df_out.shape[0]=} "
+   #      f"(Featurecounts had {featurecounts_df.shape[0]} rows)."
+   #   )
+
+   df_out.to_csv("all-counts.tsv", sep="\\t", index=False)
+
    """
 }
 
 process count_genomes_per_cell {
 
    tag "${id}"
+   label "big_mem"
 
    publishDir( 
       "${params.outputs}/counts", 
       mode: 'copy',
       saveAs: { "${id}.${it}" },
-      pattern: "genome-per-cell*.tsv",
+      // pattern: "genome-per-cell*.tsv",
    )
 
    input:
@@ -70,47 +84,82 @@ process count_genomes_per_cell {
 
    output:
    tuple val( id ), path( "genome-per-cell{,-summary}.tsv" ), emit: chr_per_cell
+   tuple val( id ), path( "*.{png,tsv}" ), emit: plots, optional: true
 
    script:
    """
-   get_col_number () (
-      local col="\$1"
-      local sep=\${2:-,}
-      head -n1 | tr "\$sep" \$'\\n' | grep -n "\$col" | cut -d: -f1
-   )
-   set -x
-   
-   # count the number of assemblies per cell
-   cell_bc_col=\$(get_col_number "cell_barcode" \$'\\t' < "${joined_table}")
-   chr_col=\$(get_col_number "Chr"  \$'\\t' < "${joined_table}")
-   genome_col=\$(get_col_number "genome_accession"  \$'\\t' < "${joined_table}")
-   awk -F'\\t' -v OFS='\\t' \
-      -v bc_col="cell_barcode" \
-      -v g_col="genome_accession" \
-      '
-      BEGIN { print bc_col, "n_genomes" } 
-      NR == 1 { for (i = 1; i <= NF; i++) col_idx[\$i]=i } 
-      NR > 1 {
-         bc = \$(col_idx[bc_col])
-         g = \$(col_idx[g_col])
-         key = bc SUBSEP g
-         if (!(key in seen)) {
-            seen[key]=1
-            counts[bc]++
-         }
-      }
-      END { for (bc in counts) print bc, counts[bc] }
-      ' \
-      "${joined_table}" \
-   > "genome-per-cell.tsv"
+   #!/usr/bin/env python
 
-   awk -F'\t' -v OFS='\t' \
-      '
-      BEGIN { print "n_genomes", "n_cell_barcodes_with_n_genomes" } 
-      NR > 1 { a[\$2]++ } 
-      END { for (key in a) print key, a[key] }
-      ' \
-      "genome-per-cell.tsv" \
-   > "genome-per-cell-summary.tsv"
+   import pandas as pd
+   from carabiner.mpl import figsaver, scattergrid
+
+   GENOME_KEY = "genome_accession"
+   CELL_BC_KEY = "cell_barcode"
+
+   df = pd.read_csv("${joined_table}", sep="\\t")#.query("not gene_biotype.isin(('rRNA', 'tRNA'))")
+   n_genomes = df[GENOME_KEY].nunique()
+
+   df_sum = (
+      df
+      .groupby([CELL_BC_KEY, GENOME_KEY])
+      [["umi_count", "read_count"]]
+      .sum()
+      .reset_index()
+   )
+
+   cell_sums = (
+      df
+      .groupby(CELL_BC_KEY)
+      [["umi_count", "read_count"]]
+      .sum()
+   )
+
+   m = (
+      df_sum
+      .pivot(
+         index=CELL_BC_KEY,
+         columns=GENOME_KEY,
+         values=["umi_count", "read_count"],
+      )
+      .fillna(0)
+      .astype(int)
+   )
+   print(m.head())
+   m = m.reindex(cell_sums.query("read_count >= 2").index)
+   m.columns = [":".join(c) for c in m.columns.to_flat_index()]
+   m.to_csv("genome-per-cell.tsv", sep="\\t")
+
+   if len(m.shape) > 1 and m.shape[-1] > 0:
+      fig, axes = scattergrid(
+         m,
+         grid_columns=m.columns.tolist(),
+         #log=m.columns.tolist(),
+      )
+      figsaver(format="png")(
+         fig=fig,
+         name="genome-per-cell",
+         df=m.reset_index(),
+      )
+
+      df_hist = (
+         df_sum
+         .query("read_count >= 2")
+         .groupby(CELL_BC_KEY)
+         [[GENOME_KEY]]
+         .nunique()
+         .reset_index()
+         .groupby(GENOME_KEY)
+         [[CELL_BC_KEY]]
+         .nunique()
+         .reset_index()
+         .rename(columns={
+            GENOME_KEY: "n_genomes_per_cell",
+            CELL_BC_KEY: "n_cells_with_n_genomes",
+         })
+      )
+
+      df_hist.to_csv("genome-per-cell-summary.tsv", sep="\\t", index=False)
+
    """
+
 }

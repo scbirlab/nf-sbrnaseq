@@ -1,13 +1,13 @@
 // Build whitelist from provided barcode files
 process build_whitelist {
 
-   tag "${id}:rev ${reverse}"
+   tag "${id}:${reverse ? "rev ${reverse}" : ""}"
 
    publishDir( 
       "${params.outputs}/barcodes", 
       mode: 'copy',
-      pattern: "whitelist.txt",
-      saveAs: { "${id}-${it}" },
+      pattern: "whitelist.txt.gz",
+      saveAs: { "${id}.${it}" },
    )
 
    input:
@@ -15,11 +15,11 @@ process build_whitelist {
    val reverse
 
    output:
-   tuple val( id ), path( "whitelist.txt" )
+   tuple val( id ), path( "whitelist.txt.gz" )
 
    script:
    """
-   set -euox
+   set -euox pipefail
    BARCODES=(${bcs})
    for i in "\${!BARCODES[@]}"
    do
@@ -66,6 +66,8 @@ process build_whitelist {
    | awk -F, '{ print \$2\$3\$4 }' \
    > whitelist.txt
 
+   pigz -v -p ${task.cpus} whitelist.txt
+
    """
 }
 
@@ -78,27 +80,28 @@ process add_errors_to_whitelist {
    publishDir( 
       "${params.outputs}/barcodes", 
       mode: 'copy',
-      pattern: "whitelist.txt",
-      saveAs: { "${id}-${it}" },
+      pattern: "whitelist-err.txt.gz",
+      saveAs: { "${id}.${it}" },
    )
 
    input:
    tuple val( id ), path( whitelist )
 
    output:
-   tuple val( id ), path( "whitelist-err.txt" )
+   tuple val( id ), path( "whitelist-err.txt.gz" )
 
    script:
    """
    #!/usr/bin/env python
 
    from itertools import product
+   import gzip
 
    ALPHABET = "ATCGN"
    INPUT_FILE = "${whitelist}"
-   OUTPUT_FILE = "whitelist-err.txt"
+   OUTPUT_FILE = "whitelist-err.txt.gz"
 
-   with open(OUTPUT_FILE, 'w') as outfile, open(INPUT_FILE, 'r') as infile:
+   with gzip.open(OUTPUT_FILE, 'wt') as outfile, gzip.open(INPUT_FILE, 'rt') as infile:
       for line in infile:
          bc_length = len(line)
          break
@@ -119,6 +122,37 @@ process add_errors_to_whitelist {
       else:
          for line in infile:
             print(line.strip(), file=outfile)
+
+   """
+}
+
+
+process chunk_whitelist {
+
+   tag "${id}"
+   label "big_cpu"
+
+   // publishDir( 
+   //    "${params.outputs}/barcodes", 
+   //    mode: 'copy',
+   //    pattern: "whitelist.txt",
+   //    saveAs: { "${id}-${it}" },
+   // )
+
+   input:
+   tuple val( id ), path( whitelist )
+   val chunk_size
+
+   output:
+   tuple val( id ), path( "chunk_*.gz" )
+
+   script:
+   """
+   zcat "${whitelist}" | split -l "${chunk_size}" - chunk_
+   for f in chunk_*
+   do
+      pigz -v -p ${task.cpus} "\$f"
+   done
 
    """
 }

@@ -3,6 +3,8 @@ process gene_body_coverage {
     tag "${id}"
     label 'med_mem'
 
+    errorStrategy 'ignore'
+
     publishDir( 
         "${params.outputs}/coverage", 
         mode: 'copy',
@@ -19,8 +21,17 @@ process gene_body_coverage {
     script:
     """
     set -x
-    samtools index "${bamfile}" 
-    geneBody_coverage.py -r "${bed}" -i "${bamfile}" -o gene-body
+    samtools index "${bamfile}"
+
+    if ! geneBody_coverage.py -r "${bed}" -i "${bamfile}" -o gene-body
+    then
+        echo "[warn] geneBody_coverage failed; retrying with expressed-only BED..." >&2
+        bedtools coverage -a "${bed}" -b "${bamfile}" -counts \
+        > bed.cov.tsv
+        awk '(\$7+0) > 0' bed.cov.tsv \
+        | cut -f1-6 > bed.expressed.bed
+        geneBody_coverage.py -r bed.expressed.bed -i "${bamfile}" -o gene-body
+    fi
 
     output_lines=\$(wc -l < *.geneBodyCoverage.txt)
     if [ "\$output_lines" -eq 1 ]
@@ -28,6 +39,7 @@ process gene_body_coverage {
         echo "Failed!"
         exit 1
     fi
+
     """
 
 }
