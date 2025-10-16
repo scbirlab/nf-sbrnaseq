@@ -6,18 +6,18 @@ process SAMtools_stats {
     publishDir( 
         "${params.outputs}/samtools", 
         mode: 'copy',
-        saveAs: { "${id}.${it}" },
+        // saveAs: { "${id}.${it}" },
     )
 
     input:
     tuple val( id ), path( bamfile )
 
     output:
-    tuple val( id ), path( "stats.txt" )
+    tuple val( id ), path( "${id}.stats.txt" )
 
     script:
     """
-    samtools stats -@ ${task.cpus} "${bamfile[0]}" > stats.txt
+    samtools stats -@ ${task.cpus} "${bamfile[0]}" > "${id}.stats.txt"
     """
 
 }
@@ -31,18 +31,18 @@ process plot_bamstats {
     publishDir( 
         "${params.outputs}/samtools", 
         mode: 'copy',
-        saveAs: { "${id}.${it}" },
+        // saveAs: { "${id}.${it}" },
     )
 
     input:
     tuple val( id ), path( txt )
 
     output:
-    tuple val( id ), path( "stats-*.png" )
+    tuple val( id ), path( "${id}-*.png" )
 
     script:
     """
-    plot-bamstats -p stats "${txt}"
+    plot-bamstats -p "${id}" "${txt}"
     """
 
 }
@@ -56,14 +56,14 @@ process SAMtools_flagstat {
     publishDir( 
         "${params.outputs}/samtools", 
         mode: 'copy',
-        saveAs: { "${id}.${it}" },
+        // saveAs: { "${id}.${it}" },
     )
 
     input:
     tuple val( id ), path( bamfile )
 
     output:
-    tuple val( id ), path( "flagstat.tsv" )
+    tuple val( id ), path( "${id}.flagstat.tsv" )
 
     script:
     """
@@ -72,7 +72,7 @@ process SAMtools_flagstat {
     #| samtools sort -@ ${task.cpus} -m ${Math.round(task.memory.getGiga() * 0.8)}G -u - \
     #| samtools markdup -@ ${task.cpus} - markdup.bam
     #samtools flagstat -@ ${task.cpus} -O tsv markdup.bam > flagstat.tsv
-    samtools flagstat -@ ${task.cpus} -O tsv "${bamfile[0]}" > flagstat.tsv
+    samtools flagstat -@ ${task.cpus} -O tsv "${bamfile[0]}" > "${id}.flagstat.tsv"
     """
 
 }
@@ -82,20 +82,20 @@ process SAMtools_coverage {
     tag "${id}"
 
     publishDir( 
-        "${params.outputs}/samtools", 
+        "${params.outputs}/samtools-coverage", 
         mode: 'copy',
-        saveAs: { "${id}.${it}" },
+        // saveAs: { "${id}.${it}" },
     )
 
     input:
     tuple val( id ), path( bamfile )
 
     output:
-    tuple val( id ), path( "coverage.tsv" )
+    tuple val( id ), path( "${id}.tsv" )
 
     script:
     """
-    samtools coverage "${bamfile[0]}" -o coverage.tsv
+    samtools coverage "${bamfile[0]}" -o "${id}.tsv"
     """
 
 }

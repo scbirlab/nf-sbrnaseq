@@ -184,7 +184,7 @@ workflow {
          params.sample_sheet, 
          checkIfExists: true 
       )
-      .splitCsv( header: true )
+      .splitCsv( header: true, quote: '"' )
       .set { csv_ch }
 
    if ( params.nanopore ) {

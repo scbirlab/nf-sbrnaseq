@@ -2,6 +2,8 @@ process build_AnnData {
    tag "${id}"
    label "big_mem"
 
+   errorStrategy 'ignore'
+
    publishDir( 
       "${params.outputs}/scanpy", 
       mode: 'copy',
@@ -62,6 +64,8 @@ process cluster_cells {
 
    tag "${id}"
    label "med_mem"
+
+   errorStrategy 'ignore'
 
    publishDir( 
       "${params.outputs}/clustering", 

@@ -30,8 +30,8 @@ process minimap_align {
    publishDir( 
       "${params.outputs}/mapped", 
       mode: 'copy',
-      saveAs: { "${id}.${it}" },
-      pattern: "*.{sam,log}"
+      // saveAs: { "${id}.${it}" },
+      pattern: "*.{bam,log}"
    )
 
    input:
@@ -39,15 +39,18 @@ process minimap_align {
    val nanopore
 
    output:
-   tuple val( id ), path( "minimap2.sam" ), emit: main
-   path "minimap2.log", emit: logs
+   tuple val( id ), path( "${id}.minimap2.bam" ), emit: main
+   path "${id}.minimap2.log", emit: logs
 
    script:
    """
-   minimap2 -a -c -2 --MD -x ${nanopore ? 'map-ont' : 'sr --frag=yes'} \
+   minimap2 -a -c -2 --MD \
+      -x ${nanopore ? 'map-ont' : 'sr --frag=yes'} \
       ${idx} ${reads} \
-      -o minimap2.sam \
-   2> minimap2.log
+      -o "${id}.minimap2.sam" \
+   2> ${id}.minimap2.log
+   samtools view -bS "${id}.minimap2.sam" -o "${id}.minimap2.bam"
+   rm "${id}.minimap2.sam"
 
    """
 }

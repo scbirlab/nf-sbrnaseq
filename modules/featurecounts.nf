@@ -8,7 +8,7 @@ process featurecounts {
    tag "${id}"
    label 'big_cpu'
 
-   // errorStrategy 'ignore'
+   errorStrategy 'ignore'
    // maxRetries 2
 
    publishDir( 
@@ -53,29 +53,30 @@ process featurecounts {
    > "${id}".species-chr-map.tsv
 
    samtools view -h ${reverse_mate ? "-f128" : ""} \
-      "${bamfile}" -o input.bam
-   samtools index "input.bam"
+      "${bamfile}" -o "${id}.bam"
+   samtools index "${id}.bam"
    featureCounts \
       -s ${strand ? strand : "0"} \
       -t ${annotation_type} \
       -g ${attribute_label} \
       -a "${gff}" \
-      ${nanopore ? "-L" : "-p"} ${(reverse_mate || nanopore) ? "-M" : "-B -C --countReadPairs"} -R BAM \
+      ${nanopore ? "-L" : "-p"} ${(reverse_mate || nanopore) ? "" : "-B -C --countReadPairs"} -R BAM \
       -T ${task.cpus} \
+      -M \
       --verbose \
       --extraAttributes ID,Name,gene_biotype,locus_tag \
-      -o "featureCounts0.tsv" \
-      "input.bam"
-   mv "featureCounts0.tsv.summary" "featureCounts.tsv.summary"
-   cp "featureCounts.tsv.summary" "${id}.featureCounts.log"
-   rm input.bam
+      -o "${id}.featureCounts0.tsv" \
+      "${id}.bam"
+   mv "${id}.featureCounts0.tsv.summary" "${id}.featureCounts.tsv.summary"
+   cp "${id}.featureCounts.tsv.summary" "${id}.featureCounts.log"
+   rm "${id}.bam"
 
    python -c '
    import pandas as pd
 
    (
       pd.read_csv(
-         "featureCounts0.tsv",
+         "${id}.featureCounts0.tsv",
          sep="\\t",
          comment="#",
       )

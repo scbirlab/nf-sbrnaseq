@@ -15,7 +15,7 @@ process trim_using_cutadapt {
    )
 
    input:
-   tuple val( id ), path( reads, stageAs: "?/*" ), val( adapters5 ), val( adapters3 )
+   tuple val( id ), path( reads, stageAs: "???/*" ), val( adapters5 ), val( adapters3 )
    tuple val( trim_qual ), val( min_length )
 
    output:
@@ -29,7 +29,7 @@ process trim_using_cutadapt {
    """
    for i in \$(seq 1 2)
    do
-      cat */*_R"\$i"*.fastq.gz > ${id}_3p_R"\$i".fastq.gz
+      cat ???/*_R"\$i"*.fastq.gz > ${id}_3p_R"\$i".fastq.gz
    done
 
    cutadapt \

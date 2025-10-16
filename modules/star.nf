@@ -45,19 +45,19 @@ process STAR_align {
    publishDir( 
       "${params.outputs}/mapped", 
       mode: 'copy',
-      saveAs: { "${id}.star.bam" },
+      // saveAs: { "${id}.star.bam" },
       pattern: "*.bam"
    )
    publishDir( 
       "${params.outputs}/mapped", 
       mode: 'copy',
-      saveAs: { "${id}.${it}" },
+      // saveAs: { "${id}.${it}" },
       pattern: "*.{bg,tab}"
    )
    publishDir( 
       "${params.outputs}/mapped", 
       mode: 'copy',
-      saveAs: { "${id}.star.log" },
+      // saveAs: { "${id}.star.log" },
       pattern: "Log.final.out"
    )
 
@@ -66,9 +66,10 @@ process STAR_align {
    val strand
 
    output:
-   tuple val( id ), path( "Aligned*.out.bam" ), emit: main
-   tuple val( id ), path( "*.bg" ), emit: bg
-   path "Log.final.out", emit: logs
+   tuple val( id ), path( "${id}.star.bam" ), emit: main
+   tuple val( id ), path( "*.star.bg" ), emit: bg
+   tuple val( id ), path( "*.star.tab" ), emit: tab
+   path "${id}.star.log", emit: logs
 
    script:
    """
@@ -90,6 +91,15 @@ process STAR_align {
       --outSAMtype BAM SortedByCoordinate \
       --outBAMsortingThreadN ${task.cpus} \
       --limitBAMsortRAM ${Math.round(task.memory.getBytes() * 0.8)}
+
+   mv "Aligned.sortedByCoord.out.bam" "${id}.star.bam"
+   mv "Log.final.out" "${id}.star.log"
+   mv ReadsPerGene.out.tab "${id}.star.tab"
+
+   for f in *.bg
+   do
+      mv "\$f" "\$(basename \$f .bg)".star.bg
+   done
    
    """
 }

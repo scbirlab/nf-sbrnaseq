@@ -7,7 +7,7 @@ process build_whitelist {
       "${params.outputs}/barcodes", 
       mode: 'copy',
       pattern: "whitelist.txt.gz",
-      saveAs: { "${id}-${it}" },
+      saveAs: { "${id}.${it}" },
    )
 
    input:
@@ -81,7 +81,7 @@ process add_errors_to_whitelist {
       "${params.outputs}/barcodes", 
       mode: 'copy',
       pattern: "whitelist-err.txt.gz",
-      saveAs: { "${id}-${it}" },
+      saveAs: { "${id}.${it}" },
    )
 
    input:
