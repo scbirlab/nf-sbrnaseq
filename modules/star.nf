@@ -58,7 +58,7 @@ process STAR_align {
       "${params.outputs}/mapped", 
       mode: 'copy',
       // saveAs: { "${id}.star.log" },
-      pattern: "Log.final.out"
+      pattern: "*.star.log"
    )
 
    input:
@@ -85,6 +85,7 @@ process STAR_align {
       --outSAMprimaryFlag AllBestScore \
       --outSAMattributes NH HI NM MD AS nM \
       --outSAMattrIHstart 0 \
+      --outFilterScoreMinOverLread 0 --outFilterMatchNminOverLread 0 --outFilterMatchNmin 0 \
       --twopassMode None \
       --quantMode GeneCounts \
       --outWigType bedGraph read1_5p \
@@ -98,7 +99,7 @@ process STAR_align {
 
    for f in *.bg
    do
-      mv "\$f" "\$(basename \$f .bg)".star.bg
+      mv "\$f" "${id}"."\$(basename \$f .bg)".star.bg
    done
    
    """
