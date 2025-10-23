@@ -16,6 +16,7 @@ fi
 
 nextflow run "$script_dir"/.. \
     -resume $docker_flag \
+    -work-dir "$script_dir"/ont/work \
     --nanopore \
     --mapper minimap2 \
     --reverse '2 3' \
