@@ -10,89 +10,17 @@
 */
 
 nextflow.enable.dsl=2
-pipeline_title = """\
-   S C B I R   s b R N A - S E Q   P I P E L I N E
-   ===============================================
+def pipelineTitle() {
+    return """\
+      S C B I R   s b R N A - S E Q   P I P E L I N E
+      ===============================================
 
-   Nextflow pipeline to process demultiplexed Illumina paired-end 
-   FASTQ files from multiple bacterial samples into a gene x
-   cell count table.
-   """
-   .stripIndent()
-
-/*
-========================================================================================
-   Help text
-========================================================================================
-*/
-if ( params.help ) {
-   println pipeline_title + """\
-         Usage:
-            nextflow run sbcirlab/nf-sbrnaseq --sample_sheet <csv> [--fastq-dir <dir>|--from-sra]
-            nextflow run sbcirlab/nf-sbrnaseq -c <config-file>
-
-         Required parameters:
-            sample_sheet               Path to a CSV containing sample IDs matched with FASTQ filenames, genome information, and adapter sequences.
-
-         If using local FASTQ data (the default behavior):
-            fastq_dir                  Path to directory containing the FASTQ file.
-          
-         Optional parameters (with defaults):  
-            from_sra = false           Whether to fetch FASTQ data from the SRA.
-            allow_cell_errors = true   Whether to allow 1 error when matching cell barcodes in the whitelist.
-            trim_qual = 5              For `cutadapt`, the minimum Phred score for trimming 3' calls
-            min_length = "9:38"        For `cutadapt`, the minimum trimmed length of a read. Shorter reads will be discarded
-            strand = 1                 For `featureCounts`, the strandedness of RNA-seq. `1` for forward, `2` for reverse.
-            ann_type = 'gene'          For `featureCounts`, features from GFF column 3 to use for counting
-            label = 'Name'             For `featureCounts`, one or more (comma-separated) fields from column 9 of GFF for labeling counts
-
-         The parameters can be provided either in the `nextflow.config` file or on the `nextflow run` command.
-   
-   """.stripIndent()
-   System.exit(0)
+      Nextflow pipeline to process demultiplexed Illumina paired-end 
+      FASTQ files from multiple bacterial samples into a gene x
+      cell count table.
+      """
+      .stripIndent()
 }
-
-/*
-========================================================================================
-   Check parameters
-========================================================================================
-*/
-if ( !params.sample_sheet ) {
-   throw new Exception("!!! PARAMETER MISSING: Please provide a path to sample_sheet")
-}
-if ( !params.from_sra ) {
-   if ( !params.fastq_dir ) {
-      throw new Exception("!!! PARAMETER MISSING: Please provide a path to fastq_dir")
-   }
-}
-
-log.info pipeline_title + """\
-   Nanopore mode     : ${params.nanopore}
-   inputs
-      input dir.     : ${params.inputs}
-      FASTQ dir.     : ${params.fastq_dir}
-      sample sheet   : ${params.sample_sheet}
-   trimming 
-      quality        : ${params.trim_qual}
-      minimum length : ${params.min_length}
-   UMI-tools
-      allow errors   : ${params.allow_cell_errors}
-   Aligner           : ${params.mapper}
-   FeatureCounts
-      Strand         : ${params.strand}
-      Annotation     : ${params.ann_type}
-      Label          : ${params.label}
-   UMIcollapse
-      Source         : ${params.umicollapse_repo}
-   output            : ${params.outputs}
-   """
-   .stripIndent()
-
-/*
-========================================================================================
-   MAIN Workflow
-========================================================================================
-*/
 
 include { 
    bowtie2_index; 
@@ -176,6 +104,73 @@ include {
 } from './modules/whitelisting.nf'
 
 workflow {
+   /*
+   ========================================================================================
+      Help text
+   ========================================================================================
+   */
+   if ( params.help ) {
+      println pipeline_title() + """\
+            Usage:
+               nextflow run sbcirlab/nf-sbrnaseq --sample_sheet <csv> [--fastq-dir <dir>|--from-sra]
+               nextflow run sbcirlab/nf-sbrnaseq -c <config-file>
+
+            Required parameters:
+               sample_sheet               Path to a CSV containing sample IDs matched with FASTQ filenames, genome information, and adapter sequences.
+
+            If using local FASTQ data (the default behavior):
+               fastq_dir                  Path to directory containing the FASTQ file.
+            
+            Optional parameters (with defaults):  
+               from_sra = false           Whether to fetch FASTQ data from the SRA.
+               allow_cell_errors = true   Whether to allow 1 error when matching cell barcodes in the whitelist.
+               trim_qual = 5              For `cutadapt`, the minimum Phred score for trimming 3' calls
+               min_length = "9:38"        For `cutadapt`, the minimum trimmed length of a read. Shorter reads will be discarded
+               strand = 1                 For `featureCounts`, the strandedness of RNA-seq. `1` for forward, `2` for reverse.
+               ann_type = 'gene'          For `featureCounts`, features from GFF column 3 to use for counting
+               label = 'Name'             For `featureCounts`, one or more (comma-separated) fields from column 9 of GFF for labeling counts
+
+            The parameters can be provided either in the `nextflow.config` file or on the `nextflow run` command.
+      
+      """.stripIndent()
+      System.exit(0)
+   }
+
+   /*
+   ========================================================================================
+      Check parameters
+   ========================================================================================
+   */
+   if ( !params.sample_sheet ) {
+      throw new Exception("!!! PARAMETER MISSING: Please provide a path to sample_sheet")
+   }
+   if ( !params.from_sra ) {
+      if ( !params.fastq_dir ) {
+         throw new Exception("!!! PARAMETER MISSING: Please provide a path to fastq_dir")
+      }
+   }
+
+   log.info pipeline_title() + """\
+      Nanopore mode     : ${params.nanopore}
+      inputs
+         input dir.     : ${params.inputs}
+         FASTQ dir.     : ${params.fastq_dir}
+         sample sheet   : ${params.sample_sheet}
+      trimming 
+         quality        : ${params.trim_qual}
+         minimum length : ${params.min_length}
+      UMI-tools
+         allow errors   : ${params.allow_cell_errors}
+      Aligner           : ${params.mapper}
+      FeatureCounts
+         Strand         : ${params.strand}
+         Annotation     : ${params.ann_type}
+         Label          : ${params.label}
+      UMIcollapse
+         Source         : ${params.umicollapse_repo}
+      output            : ${params.outputs}
+      """
+      .stripIndent()
 
    /*
    ========================================================================================
