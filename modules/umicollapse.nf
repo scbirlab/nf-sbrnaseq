@@ -16,26 +16,26 @@ process fetch_UMIcollapse {
    """
 }
 
-process UMIcollapse {
+
+process Prepend_Barcode {
 
    tag "${id}" 
 
-   label 'big_mem'
+   // label 'big_mem'
    // errorStrategy 'retry'
    // maxRetries 2
 
-   publishDir( 
-      "${params.outputs}/umicollapse", 
-      mode: 'copy',
-   )
+   // publishDir( 
+   //    "${params.outputs}/umicollapse", 
+   //    mode: 'copy',
+   // )
    
    input:
-   tuple val( id ), path( bamfile ), path( umicollapse_repo )
+   tuple val( id ), path( bamfile )
    val paired
 
    output:
-   tuple val( id ), path( "*.umicollapse.bam" ), emit: main
-   path "*.log", emit: logs
+   tuple val( id ), path( "prepended.bam" )
 
    script:
    """
@@ -51,95 +51,192 @@ process UMIcollapse {
          print \$0, "CB:Z:" a[2];
          next
       }
-   ' \
-   | samtools sort - -@${task.cpus} -m 2G -t CB \
-   | samtools view -bS - -o "cb-prepended.bam"
+   ' | samtools view -h -bS - -o "prepended.bam"
+
+   """
+}
+
+
+process Shard_for_UMIcollapse {
+
+   tag "${id}" 
+
+   label 'big_cpu'
+   // errorStrategy 'retry'
+   // maxRetries 2
+
+   // publishDir( 
+   //    "${params.outputs}/umicollapse", 
+   //    mode: 'copy',
+   // )
+   
+   input:
+   tuple val( id ), path( bamfile )
+
+   output:
+   tuple val( id ), path( "shards/_header.sam" ), path( "shards/shard-*.bam" )
+
+   script:
+   """
+   set -euox pipefail
 
    mkdir -p shards
-   samtools view -H cb-prepended.bam > shards/_hdr.sam
+   samtools view -H "${bamfile}" > shards/_header.sam
+   #samtools sort "${bamfile}" \
+   #   -@${task.cpus} -m ${Math.round(Math.floor(task.memory.getMega() * 0.8 / task.cpus))}M \
+   #   -t CB \
+   #   -o sorted.bam
 
-   samtools view -@${task.cpus} cb-prepended.bam \
-   | awk -v dir="shards" '
-      BEGIN { FS = OFS = "\\t" }
+   samtools view -@${task.cpus} "${bamfile}" \
+   | awk -F'\\t' -v OFS='\\t' -v dir="shards" '
       {
          cb="";
-         for(i=12;i<=NF;i++) if(\$i ~ /^CB:Z:/){ split(\$i,a,":"); cb=a[3]; break }
+         for(i=12;i<=NF;i++) if(\$i ~ /^CB:Z:/) { 
+            split(\$i,a,":"); cb=a[3]; 
+            break 
+         }
          if(cb == "") next
-         pref = substr(cb,1,4); 
-         if(pref == "") pref = "NNNN"
-         print >> (dir "/" pref ".sam")
+         prefix = substr(cb, 1, 16); 
+         if(prefix == "") prefix = "_no-prefix"
+         print >> (dir "/shard-" prefix ".sam")
       }
    '
 
-   for f in shards/*.sam; do
-      if [ "\$f" != "shards/_hdr.sam" ]
-      then
-         b=\${f%.sam}.bam
-         cat shards/_hdr.sam "\$f" \
-         | samtools view -@${task.cpus} -b -o "\$b" -
-         rm -f "\$f"
-
-         # sort by coordinate and stamp header as coordinate
-         samtools sort -@${task.cpus} -m 2G -o "\$b".coord.bam "\$b"
-         # ensure @HD SO:coordinate (reheader if needed)
-         samtools view -H "\$b".coord.bam \
-         | awk '
-            BEGIN { done = 0 } 
-            /^@HD/ && \$0 ~ /SO:/ { sub(/SO:[^ \\t]+/,"SO:coordinate"); done=1 } 
-            { print } 
-            END { if(!done) print "@HD\\tVN:1.6\\tSO:coordinate" }
-         ' \
-         > hdr.coord.sam
-         samtools reheader hdr.coord.sam "\$b".coord.bam > "\$b".coord.SOcoord.bam
-         samtools index "\$b".coord.SOcoord.bam
-
-         java -jar \
-            -Xmx${Math.round(task.memory.getGiga() * 0.8)}G \
-            -Xss1024m \
-               "${umicollapse_repo}/umicollapse.jar" \
-               bam ${paired ? "--paired" : ""} \
-               --tag \
-               -i "\$b".coord.SOcoord.bam \
-               -o "\$b".dedup.bam \
-         2>&1 >> "${id}.umicollapse.log"
-         rm "\$b".coord.SOcoord.bam hdr.coord.sam "\$b".coord.bam
-      fi
+   for f in shards/shard-*.sam
+   do
+      name=\$(basename "\$f" .sam)
+      cat shards/_header.sam "\$f" \
+      | samtools view \
+         -@${task.cpus} -bS \
+         -o "shards/\${name}.bam" -
+      rm "\$f"
    done
 
-   if [ ! -e "${id}.umicollapse.log" ]
+   """
+}
+
+
+process UMIcollapse {
+
+   tag "${id}:${bamfile}" 
+
+   label 'big_mem'
+   // errorStrategy 'retry'
+   // maxRetries 2
+
+   publishDir( 
+      "${params.outputs}/umicollapse/logs", 
+      mode: 'copy',
+      pattern: "*.log",
+      saveAs: { "${id}.${bamfile.simpleName}.${it}" }
+   )
+   
+   input:
+   tuple val( id ), path( sam_header ), path( bamfile ), path( umicollapse_repo )
+   val paired
+
+   output:
+   tuple val( id ), path( "umicollapse.bam" ), emit: main
+   path "*.log", emit: logs
+
+   script:
+   """
+   set -euox pipefail
+
+   #samtools reheader "${sam_header}" "${bamfile}" > with-header.bam
+
+   # sort by coordinate and stamp header as coordinate
+   samtools sort \
+      -@${task.cpus} \
+      -m ${Math.round(Math.floor(task.memory.getMega() * 0.8 / task.cpus))}M \
+      -o sorted.bam \
+      "${bamfile}"
+   # ensure @HD SO:coordinate (reheader if needed)
+   samtools view -H sorted.bam \
+   | awk '
+      BEGIN { done = 0 } 
+      /^@HD/ && \$0 ~ /SO:/ { sub(/SO:[^ \\t]+/,"SO:coordinate"); done=1 } 
+      { print } 
+      END { if(!done) print "@HD\\tVN:1.6\\tSO:coordinate" }
+   ' \
+   > header.sam
+   samtools reheader header.sam sorted.bam > SOcoord.bam
+   samtools index SOcoord.bam
+
+   java -jar \
+      -Xmx${Math.round(task.memory.getGiga() * 0.8)}G \
+      -Xss1024m \
+         "${umicollapse_repo}/umicollapse.jar" \
+         bam ${paired ? "--paired" : ""} \
+         --tag \
+         -i SOcoord.bam \
+         -o umicollapse.bam \
+   >> "umicollapse.log" 2>&1
+   rm SOcoord.bam header.sam sorted.bam
+
+   if [ ! -e "umicollapse.log" ]
    then
-      echo "There were no reads in ${bamfile[1]}" > "${id}.umicollapse.log"
+      echo "There were no reads in ${bamfile}" > "umicollapse.log"
    fi
 
-   if ls shards/*.dedup.bam > /dev/null 2>&1
+   """
+}
+
+
+process Concat_UMIcollapse {
+
+   tag "${id}" 
+   label 'big_cpu'
+   // errorStrategy 'retry'
+   // maxRetries 2
+
+   publishDir( 
+      "${params.outputs}/umicollapse/bam", 
+      mode: 'copy',
+      saveAs: { "${id}.${it}" }
+   )
+   
+   input:
+   tuple val( id ), path( original_bam ), path( bamfiles, stageAs: 'bamfiles-??????/dedup.bam' )
+
+   output:
+   tuple val( id ), path( "umicollapse.bam" ), emit: main
+
+   script:
+   """
+   set -euox pipefail
+
+   if ls *.bam > /dev/null 2>&1
    then
       samtools merge -@${task.cpus} \
-         -h cb-prepended.bam \
+         -h "${original_bam}" \
          -o merged.dedup.bam \
-         shards/*.dedup.bam
+         bamfiles-*/dedup.bam
    else
-      samtools view -H cb-prepended.bam -o merged.dedup.bam
+      samtools view -H "${original_bam}" -o merged.dedup.bam
    fi
 
-   samtools sort -@${task.cpus} -m 2G \
-      -o "${id}.umicollapse.bam" \
+   samtools sort \
+      -@${task.cpus} \
+      -m ${Math.round(Math.floor(task.memory.getMega() * 0.8 / task.cpus))}M \
+      -o "umicollapse.bam" \
       merged.dedup.bam
 
-   samtools index "${id}.umicollapse.bam"
+   samtools index "umicollapse.bam"
    rm merged.dedup.bam
    
-   start_count=\$(samtools view -c "cb-prepended.bam")
-   end_count=\$(samtools view -c "${id}.umicollapse.bam")
-   if [ "\$start_count" -gt "\$end_count"]
-   then
-      >&2 echo "Lost some reads during duplicate tagging!"
-      >&2 echo "- Initial count: \$start_count"
-      >&2 echo "- Count after tagging: \$end_count"
-      exit 1
-   fi
+   #start_count=\$(samtools view -c "${original_bam}")
+   #end_count=\$(samtools view -c "umicollapse.bam")
+   #if [ "\$start_count" -ne "\$end_count" ]
+   #then
+   #   >&2 echo "Lost some reads during duplicate tagging!"
+   #   >&2 echo "- Initial count: \$start_count"
+   #   >&2 echo "- Count after tagging: \$end_count"
+   #   exit 1
+   #fi
 
-   mv "${id}.umicollapse.bam" "${id}.umicollapse-prep.bam"
-   samtools view -h "${id}.umicollapse-prep.bam" \
+   mv "umicollapse.bam" "umicollapse-prep.bam"
+   samtools view -h "umicollapse-prep.bam" \
    | awk -F'\\t' -v OFS='\\t' '
       /^@/ { print \$0; next }
       !/^@/ {
@@ -152,9 +249,9 @@ process UMIcollapse {
          next
       }
    ' \
-   | samtools view -h -bS -o "${id}.umicollapse.bam"
+   | samtools view -h -@${task.cpus} -bS -o "umicollapse.bam"
 
-   rm "cb-prepended.bam" "${id}.umicollapse-prep.bam"
+   rm "umicollapse-prep.bam"
 
    """
 }

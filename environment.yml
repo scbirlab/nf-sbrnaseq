@@ -30,7 +30,7 @@ dependencies:
     - conda-forge::r-essentials
     - conda-forge::unzip
     - pip:
-        - 'carabiner-tools[mpl,pd]>=0.0.4'
+        - 'carabiner-tools[mpl,pd]>=0.0.5.post3'
         - 'cutadapt>=5.0'
         - 'deeptools==3.5.6'
         - 'multiqc>=1.27'

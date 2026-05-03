@@ -120,9 +120,19 @@ process remove_multimappers {
     script:
     """
     # filter out multimappers
-    #samtools view -@ ${task.cpus} -F2308 -bS --min-MQ=1 "${bamfile}" -o filtered.bam
-    samtools view -@ ${task.cpus} -bS "${bamfile}" -o filtered.bam
-    samtools sort -@ ${task.cpus} -m 2G filtered.bam -o "${id}.sorted.bam"
+    samtools view -h \
+        -@ ${task.cpus} \
+        -F2308 -bS \
+        -e '![NH] || [NH]==1' -q 20 \
+        "${bamfile}" \
+        -o filtered.bam
+    #samtools view -h -@ ${task.cpus} \
+    #    -bS "${bamfile}" \
+    #    -o filtered.bam
+    samtools sort -@ ${task.cpus} \
+        -m ${Math.round(Math.floor(task.memory.getMega() * 0.8 / task.cpus))}M \
+        filtered.bam \
+        -o "${id}.sorted.bam"
     samtools index "${id}.sorted.bam" -o "${id}.sorted.bai"
     rm filtered.bam
     

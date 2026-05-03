@@ -47,6 +47,7 @@ process bowtie2_align {
       -x ${genome_acc} \
       --very-sensitive-local \
       --threads ${task.cpus} \
+      --no-unal \
       -1 "${reads[0]}" \
       -2 "${reads[1]}" \
       -S mapped.sam \

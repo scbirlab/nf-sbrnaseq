@@ -19,7 +19,8 @@ process STAR_index {
       --runThreadN ${task.cpus} \
       --genomeDir star-index \
       --genomeFastaFiles ${fasta} \
-      --sjdbOverhang 100 \
+      --genomeSAindexNbases 10 \
+      --sjdbOverhang 99 \
       --sjdbGTFfile ${gff} \
       --sjdbGTFfeatureExon CDS \
       --sjdbGTFtagExonParentTranscript Parent \
@@ -36,7 +37,7 @@ process STAR_index {
 process STAR_align {
 
    tag "${id}:${genome_acc}" 
-   label "big_cpu"
+   label "big_mem"
    time "2d"
 
    // errorStrategy 'retry'
@@ -81,11 +82,11 @@ process STAR_align {
       --readFilesCommand zcat \
       --alignEndsType Local \
       --alignIntronMax 1 \
-      --outFilterMultimapNmax 20 \
-      --outSAMprimaryFlag AllBestScore \
+      --outFilterMultimapNmax 1 \
+      --outSAMprimaryFlag OneBestScore \
       --outSAMattributes NH HI NM MD AS nM \
       --outSAMattrIHstart 0 \
-      --outFilterScoreMinOverLread 0 --outFilterMatchNminOverLread 0 --outFilterMatchNmin 0 \
+      --outFilterScoreMinOverLread 0.4 --outFilterMatchNminOverLread 0.4 --outFilterMatchNmin 16 \
       --twopassMode None \
       --quantMode GeneCounts \
       --outWigType bedGraph read1_5p \

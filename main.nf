@@ -137,7 +137,10 @@ include {
 } from './modules/trimming.nf'
 include { 
    fetch_UMIcollapse; 
+   Prepend_Barcode;
+   Shard_for_UMIcollapse;
    UMIcollapse;
+   Concat_UMIcollapse;
 } from './modules/umicollapse.nf'
 include { 
    UMItools_count;
@@ -438,15 +441,26 @@ workflow {
          | set { mapped_reads }
 
    }
+   Prepend_Barcode(
+      mapped_reads.main
+         | remove_multimappers,
+      Channel.value( !params.unpaired ),
+   )
+      | Shard_for_UMIcollapse
 
    UMIcollapse(
-      mapped_reads.main
-         | remove_multimappers
-         | combine( fetch_UMIcollapse.out ),
+      Shard_for_UMIcollapse.out
+      .transpose()
+      .combine( fetch_UMIcollapse.out ),
       Channel.value( !params.unpaired ),
    )
 
-   UMIcollapse.out.main
+   Prepend_Barcode.out
+      // .view()
+      .combine( UMIcollapse.out.main, by: 0 )
+      .groupTuple( by: [0, 1] )
+      //.view()
+      | Concat_UMIcollapse
       | (
          SAMtools_stats
          & SAMtools_coverage
@@ -454,7 +468,7 @@ workflow {
       )
    SAMtools_stats.out | plot_bamstats
 
-   UMIcollapse.out.main
+   Concat_UMIcollapse.out.main
       .combine( genome_gff, by: 0 )  // sample_id, dedup_bam, gff
       .unique()
       .set { collapsed }

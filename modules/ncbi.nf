@@ -40,7 +40,8 @@ process fetch_genome_from_NCBI {
 // Get FASTQ
 process prefetch_from_SRA {
 
-   tag "${id}:${sra_run_id}" 
+   tag "${id}:${sra_run_id}"
+   time '3d'
 
    input:
    tuple val( id ), val( sra_run_id )
@@ -69,6 +70,7 @@ process prefetch_from_SRA {
 process download_FASTQ_from_SRA {
 
    tag "${id}:${sra_run_id}" 
+   time '3d'
 
    label 'big_cpu'
 
