@@ -104,6 +104,7 @@ include {
 } from './modules/whitelisting.nf'
 
 workflow {
+   main:
    /*
    ========================================================================================
       Help text
@@ -547,16 +548,7 @@ workflow {
       .collect()
       | multiQC
 
-}
-
-/*
-========================================================================================
-   Workflow Event Handler
-========================================================================================
-*/
-
-workflow.onComplete {
-
+   onComplete:
    println ( workflow.success ? """
       Pipeline execution summary
       ---------------------------
@@ -570,6 +562,7 @@ workflow.onComplete {
       exit status : ${workflow.exitStatus}
       """
    )
+
 }
 
 /*
