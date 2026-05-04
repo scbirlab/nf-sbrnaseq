@@ -10,7 +10,8 @@
 */
 
 nextflow.enable.dsl=2
-def pipelineTitle() {
+
+def pipeline_title() {
     return """\
       S C B I R   s b R N A - S E Q   P I P E L I N E
       ===============================================
@@ -281,14 +282,14 @@ workflow {
    Channel.of( params.umicollapse_repo ) | fetch_UMIcollapse
    reads_ch | fastQC 
    genome_ch
-      .map { it[1] }  // genome_acc
+      .map { v -> v[1] }  // genome_acc
       .unique()
       | fetch_genome_from_NCBI   // genome_acc, genome, gff
 
    genome_ch
-      .map { it[1..0] }  // genome_acc, sample_id
+      .map { v -> v[1..0] }  // genome_acc, sample_id
       .combine( fetch_genome_from_NCBI.out, by: 0 )  // genome_acc, sample_id, genome, gff
-      .map { tuple( it[1], it[-1] ) }  // sample_id, gff
+      .map { v -> tuple( v[1], v[-1] ) }  // sample_id, gff
       .unique()
       .set { genome_gff }
 
@@ -547,8 +548,10 @@ workflow {
       .unique()
       .collect()
       | multiQC
+   
+}
 
-   onComplete:
+workflow.onComplete {
    println ( workflow.success ? """
       Pipeline execution summary
       ---------------------------
@@ -562,7 +565,6 @@ workflow {
       exit status : ${workflow.exitStatus}
       """
    )
-
 }
 
 /*

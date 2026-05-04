@@ -19,9 +19,10 @@ process fetch_genome_from_NCBI {
    """
    set -euox pipefail
    ACCESSIONS=\$(echo "${accession}" | tr '+' ' ')
-   echo "\$ACCESSIONS"
+
    WEB_ROOT="https://api.ncbi.nlm.nih.gov/datasets/v2alpha/genome/accession"
    WEB_TAIL="download?include_annotation_type=GENOME_FASTA&include_annotation_type=GENOME_GFF&hydrated=FULLY_HYDRATED"
+   
    for acc in \$ACCESSIONS
    do
       curl -v "\$WEB_ROOT/\$acc/\$WEB_TAIL" \

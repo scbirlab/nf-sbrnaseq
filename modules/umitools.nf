@@ -56,7 +56,7 @@ process UMItools_extract {
       > \$(basename \$f .fastq.gz).extracted.fastq.gz
    done
 
-   rm "${id}"_R?.extracted0.fastq.gz
+   rm "${id}"_R?.extracted0.fastq.gz wl.txt
 
    """
 }
@@ -111,7 +111,9 @@ process bam2table {
 
    script:
    """
-   samtools view -h -F${paired ? "1664 -f3" : "1536"} \
+   samtools view -h \
+      -@${task.cpus} \
+      -F${paired ? "1664 -f3" : "1536"} \
       --tag 'XS:Assigned' \
       "${bamfile}" \
       -bS -o filtered.bam
@@ -171,7 +173,7 @@ process counts_per_gene_awk {
       END { 
          for (key in u) {
             split( key, k, SUBSEP ); 
-            print k[1], k[2], u[key], r[key]
+            print k[1], k[2], u1[key], r[key]
          }
       }
    '  "${tabfile}" \
@@ -210,17 +212,10 @@ process counts_per_gene {
          sep="\\t",
       )
       .groupby(["chr", "gene_id"])
-      .agg({
-         "umi": "nunique",
-         "umi_read_count": "sum",
-      })
-      .rename(columns={
-         "umi": "umi_count",
-         "umi_read_count": "read_count",
-      })
-      .rename(columns={
-         "umi": "umi_count",
-      })
+      .agg(
+         umi_count=("umi", "nunique"),
+         read_count=("umi_read_count", "sum"),
+      )
       .to_csv(
          "counts_per_gene.tsv",
          sep="\\t",
@@ -295,14 +290,10 @@ process counts_per_cell {
          sep="\\t",
       )
       .groupby("cell_barcode")
-      .agg({
-         "umi": "nunique",
-         "umi_read_count": "sum",
-      })
-      .rename(columns={
-         "umi": "umi_count",
-         "umi_read_count": "read_count",
-      })
+      .agg(
+         umi_count=("umi", "nunique"),
+         read_count=("umi_read_count", "sum"),
+      )
       .to_csv(
          "counts_per_cell.tsv",
          sep="\\t",
@@ -381,14 +372,10 @@ process counts_per_gene_per_cell {
          sep="\\t",
       )
       .groupby(["chr", "gene_id", "cell_barcode"])
-      .agg({
-         "umi": "nunique",
-         "umi_read_count": "sum",
-      })
-      .rename(columns={
-         "umi": "umi_count",
-         "umi_read_count": "read_count",
-      })
+      .agg(
+         umi_count=("umi", "nunique"),
+         read_count=("umi_read_count", "sum"),
+      )
       .to_csv(
          "counts_per_gene_per_cell.tsv",
          sep="\\t",
@@ -470,7 +457,10 @@ process UMItools_count {
    script:
    """
    samtools view -F1024 "${bamfile}" \
-   | samtools sort - -@ ${task.cpus} -m ${Math.round(task.memory.getGiga() * 0.8)}G -o sorted.bam
+   | samtools sort - \
+      -@ ${task.cpus} \
+      -m "${Math.round((task.memory.getMega() / task.cpus) * 0.8)}M" \
+      -o sorted.bam
    samtools index sorted.bam
    umi_tools count \
 		--per-gene \
