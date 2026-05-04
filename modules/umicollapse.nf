@@ -96,7 +96,7 @@ process Shard_for_UMIcollapse {
             break 
          }
          if(cb == "") next
-         prefix = substr(cb, 1, 16); 
+         prefix = substr(cb, 1, 12); 
          if(prefix == "") prefix = "_no-prefix"
          print >> (dir "/shard-" prefix ".sam")
       }
