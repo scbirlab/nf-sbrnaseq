@@ -156,6 +156,13 @@ process bam2table {
    ' \
    > tab.tsv
 
+   NUNIQUE="\$(cut -f1 | sort -u  | wc -l < tab.tsv)
+   NLINES="\$(wc -l < tab.tsv)
+   if [ "\$NLINES" -gt "\$NUNIQUE" ]
+   then
+      >&2 echo "Read IDs are not unique: n lines = \$NLINES; unique read IDs = \$NUNIQUE."
+   fi
+
    rm filtered.bam
 
    """
@@ -229,8 +236,8 @@ process counts_per_gene {
       )
       .groupby(["chr", "gene_id"])
       .agg(
-         umi_count=("umi", "nunique"),
-         read_count=("umi_read_count", "sum"),
+         umi_count=("read_id", "size"),
+         read_count=("umi_cluster_size", "sum"),
       )
       .to_csv(
          "counts_per_gene.tsv",
@@ -307,8 +314,8 @@ process counts_per_cell {
       )
       .groupby("cell_barcode")
       .agg(
-         umi_count=("umi", "nunique"),
-         read_count=("umi_read_count", "sum"),
+         umi_count=("read_id", "size"),
+         read_count=("umi_cluster_size", "sum"),
       )
       .to_csv(
          "counts_per_cell.tsv",
@@ -389,8 +396,8 @@ process counts_per_gene_per_cell {
       )
       .groupby(["chr", "gene_id", "cell_barcode"])
       .agg(
-         umi_count=("umi", "nunique"),
-         read_count=("umi_read_count", "sum"),
+         umi_count=("read_id", "size"),
+         read_count=("umi_cluster_size", "sum"),
       )
       .to_csv(
          "counts_per_gene_per_cell.tsv",
