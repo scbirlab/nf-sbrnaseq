@@ -102,14 +102,18 @@ process Shard_for_UMIcollapse {
       }
    '
 
-   for f in shards/shard-*.sam
+   SHARDS=(shards/shard-*.sam)
+   for f in "\${SHARDS[@]}"
    do
-      name=\$(basename "\$f" .sam)
-      cat shards/_header.sam "\$f" \
-      | samtools view \
-         -@${task.cpus} -bS \
-         -o "shards/\${name}.bam" -
-      rm "\$f"
+      if [ -e "\$f" ]
+      then
+         name=\$(basename "\$f" .sam)
+         cat shards/_header.sam "\$f" \
+         | samtools view \
+            -@${task.cpus} -bS \
+            -o "shards/\${name}.bam" -
+         rm "\$f"
+      fi
    done
 
    """

@@ -63,10 +63,10 @@ process join_featurecounts_UMItools {
       f"Merging on {set(featurecounts_df.columns).intersection(set(df_in.columns))}"
    )
    df_out = (
-      featurecounts_df
+      df_in
       .merge(
-         df_in,
-         on=["gene_id", "chr"],
+         featurecounts_df,
+         on=["sample_id", "chr", "gene_id"],
          how="right",
          validate="many_to_one",
       )
