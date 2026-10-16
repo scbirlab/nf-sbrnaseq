@@ -29,6 +29,7 @@ dependencies:
     - conda-forge::r-base
     - conda-forge::r-essentials
     - conda-forge::unzip
+    - conda-forge::zlib
     - pip:
         - 'carabiner-tools[mpl,pd]>=0.0.5.post3'
         - 'cutadapt>=5.0'
