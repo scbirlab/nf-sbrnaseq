@@ -275,21 +275,6 @@ workflow {
       .map { tuple( it.sample_id, it.genome_accession ) }
       .set { genome_ch }  // sample_id, genome_acc
 
-   if ( params.mod_sites ) {
-
-      genome_ch
-         .map { tuple( it[1], it[0] ) }
-         .combine( fetch_genome_from_NCBI.out, by: 1 )
-         .map { tuple( it[0], it[2], it[3] ) }
-         .unique()
-         | set { site_references }
-
-      ResolveSites(
-         site_references,
-         file( params.trna_sites, checkIfExists: true ),
-         params.sites_join_on,
-      )
-   }
 
    /*
    ========================================================================================
@@ -310,6 +295,22 @@ workflow {
       .map { v -> tuple( v[1], v[-1] ) }  // sample_id, gff
       .unique()
       .set { genome_gff }
+
+   if ( params.mod_sites ) {
+
+      genome_ch
+         .map { tuple( it[1], it[0] ) }
+         .combine( fetch_genome_from_NCBI.out, by: 1 )
+         .map { tuple( it[0], it[2], it[3] ) }
+         .unique()
+         | set { site_references }
+
+      ResolveSites(
+         site_references,
+         file( params.trna_sites, checkIfExists: true ),
+         params.sites_join_on,
+      )
+   }
 
    if ( !params.nanopore ) {
 
