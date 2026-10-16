@@ -46,12 +46,28 @@ process UMItools_extract {
    do
       zcat \$f \
       | awk '
-         NR % 4 == 1 { name = \$0 } 
-         NR % 4 == 2 { if (length(\$0) > 0) { seq = \$0 } else { seq = "N" } } 
-         NR % 4 == 0 { if (length(\$0) > 0) { qual = \$0 } else { qual = "?" } } 
-         ( NR > 1 && NR % 4 == 1 ) { print name ORS seq ORS "+" ORS qual } 
-         END { print name ORS seq ORS "+" ORS qual }
-         ' \
+         NR % 4 == 1 { header = \$0; next }
+         NR % 4 == 2 { seq = \$0; next }
+         NR % 4 == 3 { plus = \$0; next }
+         NR % 4 == 0 {
+            qual = \$0
+            if (length(seq) == 0 && length(qual) == 0) {
+                  seq = "N"
+                  qual = "!"
+            }
+            if (length(seq) != length(qual)) {
+                  print "Invalid FASTQ record at line " NR > "/dev/stderr"
+                  exit 1
+            }
+            print header ORS seq ORS plus ORS qual
+         }
+         END {
+            if (NR % 4 != 0) {
+                  print "Truncated FASTQ" > "/dev/stderr"
+                  exit 1
+            }
+         }
+      ' \
       | pigz -v --stdout -p ${task.cpus} \
       > \$(basename \$f .fastq.gz).extracted.fastq.gz
    done
