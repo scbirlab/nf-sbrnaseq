@@ -70,6 +70,7 @@ include {
    Shard_for_UMIcollapse;
    UMIcollapse;
    Concat_UMIcollapse;
+   DeduplicateMolecules;
 } from './modules/umicollapse.nf'
 include { 
    UMItools_count;
@@ -465,6 +466,7 @@ workflow {
          SAMtools_stats
          & SAMtools_coverage
          & SAMtools_flagstat
+         & DeduplicateMolecules
       )
    SAMtools_stats.out | plot_bamstats
 

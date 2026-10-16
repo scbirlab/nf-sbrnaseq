@@ -265,3 +265,45 @@ process Concat_UMIcollapse {
 
    """
 }
+
+
+process DeduplicateMolecules {
+
+    tag "${id}"
+    label 'big_cpu'
+
+    publishDir(
+        "${params.outputs}/molecules",
+        mode: 'copy',
+    )
+
+    input:
+    tuple val( id ), path( bam )
+
+    output:
+    tuple val( id ), path( "${id}.molecules.bam" ),
+        path( "${id}.molecules.bam.bai" ),
+        emit: main
+
+    script:
+    """
+    set -euox pipefail
+
+    samtools view \\
+        -@ ${task.cpus} \\
+        -b \\
+        -F 3844 \\
+        "${bam}" \\
+    | samtools sort \\
+        -@ ${task.cpus} \\
+        -m ${Math.round(Math.floor(task.memory.getMega() * 0.8 / task.cpus))}M \\
+        -o "${id}.molecules.bam" -
+
+    samtools index \\
+        -@ ${task.cpus} \\
+        "${id}.molecules.bam"
+
+    samtools quickcheck -v "${id}.molecules.bam"
+    """
+}
+

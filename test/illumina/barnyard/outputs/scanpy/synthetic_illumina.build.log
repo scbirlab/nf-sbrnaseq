@@ -9,7 +9,7 @@ Fontconfig error: No writable cache directories
 	id: synthetic_illumina
 	plot_format: png
 	output: build
-	func: <function _build at 0x7f1bc8d03560>
+	func: <function _build at 0x7fb403017560>
 Loading file all-counts.tsv as a sparse matrix...
 shape: (64, 17)
 dup genes?: False
@@ -77,16 +77,16 @@ TGCATGCTTGACCAGACTTCC              0.0             28.0
 TGCATGCTTGACCATCGGAAT              0.0             17.0
 
 [64 rows x 2 columns]
-  0%|          | 0/2 [00:00<?, ?it/s]100%|██████████| 2/2 [00:00<00:00, 153.87it/s]
+  0%|          | 0/2 [00:00<?, ?it/s]100%|██████████| 2/2 [00:00<00:00, 150.70it/s]
 Saving barnyard plots...
 Saving plot at ./build.genome-counts.png
 Saving data at ./build.genome-counts.csv
 Calculating QC metrics...
 Calculating tRNA:rRNA ratio...
-  0%|          | 0/6 [00:00<?, ?it/s]100%|██████████| 6/6 [00:00<00:00, 69.54it/s]
+  0%|          | 0/6 [00:00<?, ?it/s]100%|██████████| 6/6 [00:00<00:00, 71.39it/s]
 Saving plot at ./build.cell-qc.png
 Saving data at ./build.cell-qc.csv
-  0%|          | 0/4 [00:00<?, ?it/s]100%|██████████| 4/4 [00:00<00:00, 42.72it/s]
+  0%|          | 0/4 [00:00<?, ?it/s]100%|██████████| 4/4 [00:00<00:00, 42.02it/s]
 Saving plot at ./build.gene-qc.png
 Saving data at ./build.gene-qc.csv
 Saving the following AnnData object as build.h5ad:
@@ -95,4 +95,4 @@ AnnData object with n_obs × n_vars = 64 × 17
     var: 'genome_accession', 'assembly', 'chr', 'gene_id', 'locus_tag', 'Name', 'gene_biotype', 'Length', 'pseudobulk_read_count', 'is_tRNA', 'is_protein_coding', 'is_rRNA', 'n_cells_by_counts', 'mean_counts', 'log1p_mean_counts', 'pct_dropout_by_counts', 'total_counts', 'log1p_total_counts'
     uns: 'log1p'
     layers: 'counts'
-⏰ Completed process in 0:00:26.853594
+⏰ Completed process in 0:00:26.829522
