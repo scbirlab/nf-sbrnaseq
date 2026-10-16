@@ -442,6 +442,8 @@ workflow {
       mapped_reads.main
          | remove_multimappers,
       Channel.value( !params.unpaired ),
+      Channel.value( params.nanopore ),
+
    )
       | Shard_for_UMIcollapse
 
@@ -450,6 +452,7 @@ workflow {
       .transpose()
       .combine( fetch_UMIcollapse.out ),
       Channel.value( !params.unpaired ),
+      Channel.value( params.nanopore ),
    )
 
    Prepend_Barcode.out

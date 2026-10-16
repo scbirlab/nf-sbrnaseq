@@ -33,6 +33,7 @@ process Prepend_Barcode {
    input:
    tuple val( id ), path( bamfile )
    val paired
+   val nanopore
 
    output:
    tuple val( id ), path( "prepended.bam" )
@@ -41,7 +42,7 @@ process Prepend_Barcode {
    """
    set -euox pipefail
 
-   samtools view -h ${paired ? "" : "-f128"} "${bamfile[1]}" \
+   samtools view -h ${(paired || nanopore) ? "" : "-f128"} "${bamfile[1]}" \
    | awk -F'\\t' -v OFS='\\t' '
       /^@/ { print; next }
       !/^@/ {
@@ -138,6 +139,7 @@ process UMIcollapse {
    input:
    tuple val( id ), path( sam_header ), path( bamfile ), path( umicollapse_repo )
    val paired
+   val nanopore
 
    output:
    tuple val( id ), path( "umicollapse.bam" ), emit: main
@@ -167,11 +169,12 @@ process UMIcollapse {
    samtools reheader header.sam sorted.bam > SOcoord.bam
    samtools index SOcoord.bam
 
-   java -jar \
+   java \
       -Xmx${Math.round(task.memory.getGiga() * 0.8)}G \
       -Xss1024m \
+      -jar \
          "${umicollapse_repo}/umicollapse.jar" \
-         bam ${paired ? "--paired" : ""} \
+         bam ${(paired || (!nanopore)) ? "--paired" : ""} \
          --tag \
          -i SOcoord.bam \
          -o umicollapse.bam \
@@ -209,15 +212,18 @@ process Concat_UMIcollapse {
    script:
    """
    set -euox pipefail
+   shopt -s nullglob
+   shards=(bamfiles-*/dedup.bam)
 
-   if ls *.bam > /dev/null 2>&1
+   if [ \${#shards[@]} -gt 0 ]; then
    then
       samtools merge -@${task.cpus} \
          -h "${original_bam}" \
          -o merged.dedup.bam \
-         bamfiles-*/dedup.bam
+         "\${shards[@]}"
    else
-      samtools view -H "${original_bam}" -o merged.dedup.bam
+      samtools view -H "${original_bam}" \
+      | samtools view -b -o merged.dedup.bam -
    fi
 
    samtools sort \
