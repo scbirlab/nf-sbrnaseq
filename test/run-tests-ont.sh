@@ -13,7 +13,7 @@ elif [ "$DOCKER" == "crick" ]
 then
     export NXF_CONTAINER_ENGINE=singularity
     module load Nextflow Singularity
-    docker_flag='-with-singularity'
+    docker_flag='-with-singularity -profile local'
 else
     export SINGULARITY_FAKEROOT=1
     docker_flag=''

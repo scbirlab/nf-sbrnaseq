@@ -20,15 +20,14 @@ jobs:
         # sudo docker builder prune -a
     - run: df -h
     - uses: actions/checkout@v4
-    - uses: conda-incubator/setup-miniconda@v2
-      with:
-        python-version: 3.11
-        channels: conda-forge,bioconda,defaults 
-        channel-priority: true
     - uses: nf-core/setup-nextflow@v1
       with:
         version: 23
-    - name: Test Nextflow pipeline
+    - name: Test Nextflow pipeline - ONT
       run: |
         set -x
-        bash test/run-tests.sh gh
+        bash test/run-tests-ont.sh gh
+    - name: Test Nextflow pipeline - Illumina
+      run: |
+        set -x
+        bash test/run-tests-illumina.sh gh
