@@ -62,13 +62,18 @@ process join_featurecounts_UMItools {
    print_err(
       f"Merging on {set(featurecounts_df.columns).intersection(set(df_in.columns))}"
    )
+   key = ["gene_id", "chr"]
+
+   assert not featurecounts_df.duplicated(key).any()
+   assert not df_in.duplicated(key + ["cell_barcode"]).any()
+
    df_out = (
       df_in
       .merge(
          featurecounts_df,
          on=["sample_id", "chr", "gene_id"],
          how="right",
-         validate="many_to_one",
+         validate="one_to_many",
       )
       .drop_duplicates()
       .assign(
