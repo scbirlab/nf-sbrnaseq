@@ -1,0 +1,2 @@
+Sample	Unique Reads	Duplicate Reads
+synthetic_illumina	1908.0	2404.0

@@ -1,0 +1,45 @@
+
+Fontconfig error: No writable cache directories
+	/opt/conda/envs/env/var/cache/fontconfig
+	/tmp/xdg/fontconfig
+	/camp/home/johnsoe/.fontconfig
+🚀 Filtering AnnData with the following parameters:
+	subcommand: filter
+	input: build.h5ad
+	min_counts_per_cell: 60
+	min_cells_per_gene: 3
+	min_cells: 950
+	min_genes: 200
+	plot_format: png
+	output: filter
+	func: <function _filter at 0x7ff2a931f6a0>
+Filtering cells with max_cutoff=13...
+Filtering genes with max_cutoff=3...
+/opt/conda/envs/env/lib/python3.11/site-packages/scanpy/preprocessing/_simple.py:293: ImplicitModificationWarning: Trying to modify attribute `.var` of view, initializing view as actual.
+  adata.var["n_cells"] = number
+Saving the following AnnData object as filter.filtered.h5ad:
+AnnData object with n_obs × n_vars = 64 × 17
+    obs: 'sample_id', 'n_genes_by_counts', 'log1p_n_genes_by_counts', 'total_counts', 'log1p_total_counts', 'pct_counts_in_top_10_genes', 'total_counts_is_tRNA', 'log1p_total_counts_is_tRNA', 'pct_counts_is_tRNA', 'total_counts_is_protein_coding', 'log1p_total_counts_is_protein_coding', 'pct_counts_is_protein_coding', 'total_counts_is_rRNA', 'log1p_total_counts_is_rRNA', 'pct_counts_is_rRNA', 'tRNA_rRNA_ratio'
+    var: 'genome_accession', 'assembly', 'chr', 'gene_id', 'locus_tag', 'Name', 'gene_biotype', 'Length', 'pseudobulk_read_count', 'is_tRNA', 'is_protein_coding', 'is_rRNA', 'n_cells_by_counts', 'mean_counts', 'log1p_mean_counts', 'pct_dropout_by_counts', 'total_counts', 'log1p_total_counts', 'n_cells'
+    uns: 'log1p'
+    layers: 'counts'
+Found 2 unique genome reference(s): ['GCF_000005845.2', 'GCF_000009045.1']
+                       GCF_000005845.2  GCF_000009045.1
+ACGTGCAAGCTAGCATGCCGA         7.624619        11.930813
+ACGTGCAAGCTAGCCGTATGC         0.000000         9.010913
+ACGTGCAAGCTAGCGACTTCC         0.000000         9.704061
+ACGTGCAAGCTAGCTCGGAAT         0.000000        12.441639
+ACGTGCACCATGGTATGCCGA         9.010913         0.000000
+...                                ...              ...
+TGCATGCGGCATTATCGGAAT        10.321375         0.000000
+TGCATGCTTGACCAATGCCGA        10.321375         9.704061
+TGCATGCTTGACCACGTATGC         0.000000        11.930813
+TGCATGCTTGACCAGACTTCC         0.000000        12.441639
+TGCATGCTTGACCATCGGAAT         0.000000         9.010913
+
+[64 rows x 2 columns]
+  0%|          | 0/2 [00:00<?, ?it/s]100%|██████████| 2/2 [00:00<00:00, 139.32it/s]
+Saving barnyard plots...
+Saving plot at ./filter.genome-counts-after-filter.png
+Saving data at ./filter.genome-counts-after-filter.csv
+⏰ Completed process in 0:00:00.606502

@@ -1,0 +1,98 @@
+
+Fontconfig error: No writable cache directories
+	/opt/conda/envs/env/var/cache/fontconfig
+	/tmp/xdg/fontconfig
+	/camp/home/johnsoe/.fontconfig
+🚀 Building AnnData with the following parameters:
+	subcommand: build
+	input: all-counts.tsv
+	id: synthetic_illumina
+	plot_format: png
+	output: build
+	func: <function _build at 0x7f1bc8d03560>
+Loading file all-counts.tsv as a sparse matrix...
+shape: (64, 17)
+dup genes?: False
+n dup genes: 0
+dup cells?: False
+n dup cells: 0
+var has duplicates?: False
+obs has duplicates?: False
+             chr  ...                                      __gene_id__
+0    NC_000913.3  ...       GCF_000005845.2:ASM584v2:NC_000913.3:b0244
+1    NC_000913.3  ...       GCF_000005845.2:ASM584v2:NC_000913.3:b0244
+2    NC_000913.3  ...       GCF_000005845.2:ASM584v2:NC_000913.3:b0244
+3    NC_000913.3  ...       GCF_000005845.2:ASM584v2:NC_000913.3:b0244
+4    NC_000913.3  ...       GCF_000005845.2:ASM584v2:NC_000913.3:b0244
+..           ...  ...                                              ...
+603  NC_000964.3  ...  GCF_000009045.1:ASM904v1:NC_000964.3:BSU_tRNA_7
+604  NC_000964.3  ...  GCF_000009045.1:ASM904v1:NC_000964.3:BSU_tRNA_7
+605  NC_000964.3  ...  GCF_000009045.1:ASM904v1:NC_000964.3:BSU_tRNA_7
+606  NC_000964.3  ...  GCF_000009045.1:ASM904v1:NC_000964.3:BSU_tRNA_7
+607  NC_000964.3  ...  GCF_000009045.1:ASM904v1:NC_000964.3:BSU_tRNA_7
+
+[608 rows x 20 columns]
+AnnData object with n_obs × n_vars = 64 × 17
+    obs: 'sample_id'
+Annotating gene features...
+(17, 9) ['Length', 'Name', 'assembly', 'chr', 'gene_biotype', 'gene_id', 'genome_accession', 'locus_tag', 'pseudobulk_read_count']
+                                                 genome_accession  ... pseudobulk_read_count
+GCF_000005845.2:ASM584v2:NC_000913.3:b0244        GCF_000005845.2  ...                   133
+GCF_000005845.2:ASM584v2:NC_000913.3:b0343        GCF_000005845.2  ...                   133
+GCF_000005845.2:ASM584v2:NC_000913.3:b0344        GCF_000005845.2  ...                   133
+GCF_000005845.2:ASM584v2:NC_000913.3:b0345        GCF_000005845.2  ...                   130
+GCF_000005845.2:ASM584v2:NC_000913.3:b1234        GCF_000005845.2  ...                   134
+GCF_000005845.2:ASM584v2:NC_000913.3:b1430        GCF_000005845.2  ...                   134
+GCF_000005845.2:ASM584v2:NC_000913.3:b3855        GCF_000005845.2  ...                   133
+GCF_000005845.2:ASM584v2:NC_000913.3:b4134        GCF_000005845.2  ...                   135
+GCF_000009045.1:ASM904v1:NC_000964.3:BSU_00010    GCF_000009045.1  ...                   106
+GCF_000009045.1:ASM904v1:NC_000964.3:BSU_00070    GCF_000009045.1  ...                   106
+GCF_000009045.1:ASM904v1:NC_000964.3:BSU_01070    GCF_000009045.1  ...                   107
+GCF_000009045.1:ASM904v1:NC_000964.3:BSU_24220    GCF_000009045.1  ...                   107
+GCF_000009045.1:ASM904v1:NC_000964.3:BSU_25200    GCF_000009045.1  ...                   108
+GCF_000009045.1:ASM904v1:NC_000964.3:BSU_rRNA_26  GCF_000009045.1  ...                   106
+GCF_000009045.1:ASM904v1:NC_000964.3:BSU_rRNA_30  GCF_000009045.1  ...                   107
+GCF_000009045.1:ASM904v1:NC_000964.3:BSU_tRNA_51  GCF_000009045.1  ...                   106
+GCF_000009045.1:ASM904v1:NC_000964.3:BSU_tRNA_7   GCF_000009045.1  ...                   106
+
+[17 rows x 9 columns]
+Empty DataFrame
+Columns: []
+Index: [GCF_000005845.2:ASM584v2:NC_000913.3:b0244, GCF_000005845.2:ASM584v2:NC_000913.3:b0343, GCF_000005845.2:ASM584v2:NC_000913.3:b0344, GCF_000005845.2:ASM584v2:NC_000913.3:b0345, GCF_000005845.2:ASM584v2:NC_000913.3:b1234, GCF_000005845.2:ASM584v2:NC_000913.3:b1430, GCF_000005845.2:ASM584v2:NC_000913.3:b3855, GCF_000005845.2:ASM584v2:NC_000913.3:b4134, GCF_000009045.1:ASM904v1:NC_000964.3:BSU_00010, GCF_000009045.1:ASM904v1:NC_000964.3:BSU_00070, GCF_000009045.1:ASM904v1:NC_000964.3:BSU_01070, GCF_000009045.1:ASM904v1:NC_000964.3:BSU_24220, GCF_000009045.1:ASM904v1:NC_000964.3:BSU_25200, GCF_000009045.1:ASM904v1:NC_000964.3:BSU_rRNA_26, GCF_000009045.1:ASM904v1:NC_000964.3:BSU_rRNA_30, GCF_000009045.1:ASM904v1:NC_000964.3:BSU_tRNA_51, GCF_000009045.1:ASM904v1:NC_000964.3:BSU_tRNA_7]
+[]
+{'GCF_000005845.2:ASM584v2:NC_000913.3:b0244': 1, 'GCF_000005845.2:ASM584v2:NC_000913.3:b0343': 1, 'GCF_000005845.2:ASM584v2:NC_000913.3:b0344': 1, 'GCF_000005845.2:ASM584v2:NC_000913.3:b0345': 1, 'GCF_000005845.2:ASM584v2:NC_000913.3:b1234': 1, 'GCF_000005845.2:ASM584v2:NC_000913.3:b1430': 1, 'GCF_000005845.2:ASM584v2:NC_000913.3:b3855': 1, 'GCF_000005845.2:ASM584v2:NC_000913.3:b4134': 1, 'GCF_000009045.1:ASM904v1:NC_000964.3:BSU_00010': 1, 'GCF_000009045.1:ASM904v1:NC_000964.3:BSU_00070': 1, 'GCF_000009045.1:ASM904v1:NC_000964.3:BSU_01070': 1, 'GCF_000009045.1:ASM904v1:NC_000964.3:BSU_24220': 1, 'GCF_000009045.1:ASM904v1:NC_000964.3:BSU_25200': 1, 'GCF_000009045.1:ASM904v1:NC_000964.3:BSU_rRNA_26': 1, 'GCF_000009045.1:ASM904v1:NC_000964.3:BSU_rRNA_30': 1, 'GCF_000009045.1:ASM904v1:NC_000964.3:BSU_tRNA_51': 1, 'GCF_000009045.1:ASM904v1:NC_000964.3:BSU_tRNA_7': 1}
+['GCF_000005845.2:ASM584v2:NC_000913.3:b0244', 'GCF_000005845.2:ASM584v2:NC_000913.3:b0343', 'GCF_000005845.2:ASM584v2:NC_000913.3:b0344', 'GCF_000005845.2:ASM584v2:NC_000913.3:b0345', 'GCF_000005845.2:ASM584v2:NC_000913.3:b1234', 'GCF_000005845.2:ASM584v2:NC_000913.3:b1430', 'GCF_000005845.2:ASM584v2:NC_000913.3:b3855', 'GCF_000005845.2:ASM584v2:NC_000913.3:b4134', 'GCF_000009045.1:ASM904v1:NC_000964.3:BSU_00010', 'GCF_000009045.1:ASM904v1:NC_000964.3:BSU_00070', 'GCF_000009045.1:ASM904v1:NC_000964.3:BSU_01070', 'GCF_000009045.1:ASM904v1:NC_000964.3:BSU_24220', 'GCF_000009045.1:ASM904v1:NC_000964.3:BSU_25200', 'GCF_000009045.1:ASM904v1:NC_000964.3:BSU_rRNA_26', 'GCF_000009045.1:ASM904v1:NC_000964.3:BSU_rRNA_30', 'GCF_000009045.1:ASM904v1:NC_000964.3:BSU_tRNA_51', 'GCF_000009045.1:ASM904v1:NC_000964.3:BSU_tRNA_7']
+Found 2 unique genome reference(s): ['GCF_000005845.2', 'GCF_000009045.1']
+                       GCF_000005845.2  GCF_000009045.1
+ACGTGCAAGCTAGCATGCCGA             14.0             26.0
+ACGTGCAAGCTAGCCGTATGC              0.0             17.0
+ACGTGCAAGCTAGCGACTTCC              0.0             19.0
+ACGTGCAAGCTAGCTCGGAAT              0.0             28.0
+ACGTGCACCATGGTATGCCGA             18.0              0.0
+...                                ...              ...
+TGCATGCGGCATTATCGGAAT             22.0              0.0
+TGCATGCTTGACCAATGCCGA             22.0             19.0
+TGCATGCTTGACCACGTATGC              0.0             26.0
+TGCATGCTTGACCAGACTTCC              0.0             28.0
+TGCATGCTTGACCATCGGAAT              0.0             17.0
+
+[64 rows x 2 columns]
+  0%|          | 0/2 [00:00<?, ?it/s]100%|██████████| 2/2 [00:00<00:00, 153.87it/s]
+Saving barnyard plots...
+Saving plot at ./build.genome-counts.png
+Saving data at ./build.genome-counts.csv
+Calculating QC metrics...
+Calculating tRNA:rRNA ratio...
+  0%|          | 0/6 [00:00<?, ?it/s]100%|██████████| 6/6 [00:00<00:00, 69.54it/s]
+Saving plot at ./build.cell-qc.png
+Saving data at ./build.cell-qc.csv
+  0%|          | 0/4 [00:00<?, ?it/s]100%|██████████| 4/4 [00:00<00:00, 42.72it/s]
+Saving plot at ./build.gene-qc.png
+Saving data at ./build.gene-qc.csv
+Saving the following AnnData object as build.h5ad:
+AnnData object with n_obs × n_vars = 64 × 17
+    obs: 'sample_id', 'n_genes_by_counts', 'log1p_n_genes_by_counts', 'total_counts', 'log1p_total_counts', 'pct_counts_in_top_10_genes', 'total_counts_is_tRNA', 'log1p_total_counts_is_tRNA', 'pct_counts_is_tRNA', 'total_counts_is_protein_coding', 'log1p_total_counts_is_protein_coding', 'pct_counts_is_protein_coding', 'total_counts_is_rRNA', 'log1p_total_counts_is_rRNA', 'pct_counts_is_rRNA', 'tRNA_rRNA_ratio'
+    var: 'genome_accession', 'assembly', 'chr', 'gene_id', 'locus_tag', 'Name', 'gene_biotype', 'Length', 'pseudobulk_read_count', 'is_tRNA', 'is_protein_coding', 'is_rRNA', 'n_cells_by_counts', 'mean_counts', 'log1p_mean_counts', 'pct_dropout_by_counts', 'total_counts', 'log1p_total_counts'
+    uns: 'log1p'
+    layers: 'counts'
+⏰ Completed process in 0:00:26.853594

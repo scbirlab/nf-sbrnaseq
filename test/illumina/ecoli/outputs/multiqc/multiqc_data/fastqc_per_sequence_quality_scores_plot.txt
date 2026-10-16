@@ -1,0 +1,2 @@
+Sample	0
+synthetic_illumina	(9.0, 3834.0)

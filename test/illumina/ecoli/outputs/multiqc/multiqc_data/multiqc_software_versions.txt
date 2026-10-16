@@ -1,0 +1,4 @@
+Sample	Samtools	Cutadapt	FastQC
+Cutadapt		5.2	
+FastQC			0.12.1
+Samtools	1.23.1		

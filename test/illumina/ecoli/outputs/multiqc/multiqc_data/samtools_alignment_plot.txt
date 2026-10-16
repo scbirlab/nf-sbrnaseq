@@ -1,0 +1,2 @@
+Sample	Mapped (with MQ>0)
+synthetic_illumina	3412.0

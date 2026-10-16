@@ -1,0 +1,2 @@
+Sample	NC_000913.3	NC_000964.3
+synthetic_illumina	{'startpos': 1, 'endpos': 4641652, 'numreads': 1864, 'covbases': 1340, 'coverage': 0.028869, 'meandepth': 0.0281107, 'meanbaseq': 40.0, 'meanmapq': 255.0, 'size': 4641652}	{'startpos': 1, 'endpos': 4215606, 'numreads': 1679, 'covbases': 1486, 'coverage': 0.03525, 'meandepth': 0.0278721, 'meanbaseq': 40.0, 'meanmapq': 255.0, 'size': 4215606}

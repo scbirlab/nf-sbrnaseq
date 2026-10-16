@@ -1,0 +1,46 @@
+This is cutadapt 5.2 with Python 3.11.15
+Command line parameters: -g ACGTTCGA -G TGCAGTCA --report full --action retain --discard-untrimmed --minimum-length 9:38 -j 2 -o synthetic_illumina_R1.with-adapters.fastq.gz -p synthetic_illumina_R2.with-adapters.fastq.gz synthetic_illumina_5p_R1.fastq.gz synthetic_illumina_5p_R2.fastq.gz
+Processing paired-end reads on 2 cores ...
+
+=== Summary ===
+
+Total read pairs processed:              1,917
+  Read 1 with adapter:                   1,917 (100.0%)
+  Read 2 with adapter:                   1,917 (100.0%)
+
+== Read fate breakdown ==
+Pairs that were too short:                   0 (0.0%)
+Pairs discarded as untrimmed:                0 (0.0%)
+Pairs written (passing filters):         1,917 (100.0%)
+
+Total basepairs processed:       364,230 bp
+  Read 1:       168,696 bp
+  Read 2:       195,534 bp
+Total written (filtered):        364,230 bp (100.0%)
+  Read 1:       168,696 bp
+  Read 2:       195,534 bp
+
+=== First read: Adapter 1 ===
+
+Sequence: ACGTTCGA; Type: regular 5'; Length: 8; Trimmed: 1917 times
+
+Minimum overlap: 3
+No. of allowed errors:
+1-8 bp: 0
+
+Overview of removed sequences
+length	count	expect	max.err	error counts
+8	1917	0.0	0	1917
+
+
+=== Second read: Adapter 2 ===
+
+Sequence: TGCAGTCA; Type: regular 5'; Length: 8; Trimmed: 1917 times
+
+Minimum overlap: 3
+No. of allowed errors:
+1-8 bp: 0
+
+Overview of removed sequences
+length	count	expect	max.err	error counts
+8	1917	0.0	0	1917

@@ -1,0 +1,2 @@
+Sample	0
+synthetic_illumina	('NC_000913.3', 2986)

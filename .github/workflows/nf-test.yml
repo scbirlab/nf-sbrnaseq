@@ -30,4 +30,8 @@ jobs:
     - name: Test Nextflow pipeline - Illumina
       run: |
         set -x
-        bash test/run-tests-illumina.sh gh
+        bash test/run-tests-illumina.sh gh ecoli
+    - name: Test Nextflow pipeline - Barnyard
+      run: |
+        set -x
+        bash test/run-tests-illumina.sh gh barnyard

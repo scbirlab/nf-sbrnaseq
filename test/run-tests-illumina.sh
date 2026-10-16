@@ -1,30 +1,55 @@
- #!/usr/bin/env bash
-
+#!/usr/bin/env bash
+# Usage: bash test/run-tests-illumina.sh [gh|crick|local] [ecoli|barnyard]
 set -euox pipefail
+HERE="$(readlink -f "$(dirname "${BASH_SOURCE[0]}")")"
+REPO="$(readlink -f  "$HERE/..")"
+PROFILE="${1:-gh}"
+EXPT="${2:-ecoli}"
 
-script_dir="$(dirname $0)"
-DOCKER=${1:-no}
-
-if [ "$DOCKER" == "gh" ]
-then
+case "$PROFILE" in
+  gh)    
     export NXF_CONTAINER_ENGINE=docker
-    docker_flag='-profile gh'
-elif [ "$DOCKER" == "crick" ]
-then
-    export NXF_CONTAINER_ENGINE=singularity
-    module load Nextflow Singularity
-    docker_flag='-with-singularity -profile local'
-else
-    export SINGULARITY_FAKEROOT=1
-    docker_flag=''
-fi
+    EXTRA="-with-docker"
+    ;;
+  crick) 
+    export NXF_CONTAINER_ENGINE=singularity; 
+    PROFILE=local
+    EXTRA="-with-singularity"
+    module load Singularity Nextflow
+    ;;
+  local) EXTRA="-with-conda" ;;
+  *) echo 'Usage: run-tests-illumina.sh [gh|crick|local] [ecoli|barnyard]' >&2; exit 2 ;;
+esac
+sheet="$HERE/illumina/$EXPT/sample-sheet.csv"
+outdir="$HERE/illumina/$EXPT/outputs"
+case "$EXPT" in
+  ecoli) : ;;
+  bsub) : ;;
+  barnyard) : ;;
+  *) echo 'Experiment must be ecoli, bsub, or barnyard' >&2; exit 2 ;;
+esac
 
-nextflow run "$script_dir"/.. \
-    -resume $docker_flag \
-    -work-dir "$script_dir"/illumina/work \
-    -with-dag "$script_dir"/illumina/dag.html \
+# Always regenerate reads AND the design manifest together. The generator
+# reads pinned NCBI references, cached on the first execution.
+GENERATOR=(python3 "$HERE/scripts/generate_fixture.py" --mode "$EXPT" --output-dir "$HERE/illumina/$EXPT")
+if [[ -n "${SBRNASEQ_REFERENCE_DIR:-}" ]]; then
+  GENERATOR+=(--reference-dir "$SBRNASEQ_REFERENCE_DIR")
+fi
+if [[ "${SBRNASEQ_NO_DOWNLOAD:-0}" == 1 ]]; then
+  GENERATOR+=(--no-download)
+fi
+"${GENERATOR[@]}"
+
+nextflow run "$REPO" \
+    -resume \
+    -profile "$PROFILE" "$EXTRA" \
+    -work-dir "$HERE/illumina/$EXPT/work" \
+    -with-dag "$HERE/illumina/$EXPT/dag.html" \
     --mapper star \
-    --sample_sheet "$script_dir"/illumina/sample-sheet.csv \
-    --inputs "$script_dir"/illumina/inputs \
-    --fastq_dir "$script_dir"/illumina/fastq \
-    --outputs "$script_dir"/illumina/outputs
+    --sample_sheet "$sheet" \
+    --inputs "$HERE/illumina/$EXPT/inputs" \
+    --fastq_dir "$HERE/illumina/$EXPT/fastq" \
+    --outputs "$outdir" \
+    --trim_qual 5 \
+    --min_length '9:38' \
+    --strand 1

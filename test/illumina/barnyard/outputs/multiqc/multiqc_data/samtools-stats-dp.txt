@@ -1,0 +1,2 @@
+Sample	Total sequences	Mapped &amp; paired	Properly paired	Duplicated	QC Failed	Reads MQ0	Mapped bases (CIGAR)	Bases Trimmed	Duplicated bases	Diff chromosomes	Other orientation	Inward pairs	Outward pairs
+synthetic_illumina	0.0040479999999999995	0.0040479999999999995	0.0040479999999999995	0.000505	0.0	0.0	0.28331999999999996	0.0	0.035342	0.0	0.0	0.0020239999999999998	0.0
