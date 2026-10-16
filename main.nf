@@ -307,7 +307,7 @@ workflow {
 
       ResolveSites(
          site_references,
-         file( params.trna_sites, checkIfExists: true ),
+         file( params.mod_sites, checkIfExists: true ),
          params.sites_join_on,
       )
    }
