@@ -56,6 +56,7 @@ include {
    gene_body_coverage;  
    gff2bed; 
 } from './modules/rseqc.nf'
+include { ResolveSites } from './modules/sites.nf'
 include { 
    STAR_index; 
    STAR_align;
@@ -273,6 +274,22 @@ workflow {
    csv_ch
       .map { tuple( it.sample_id, it.genome_accession ) }
       .set { genome_ch }  // sample_id, genome_acc
+
+   if ( params.mod_sites ) {
+
+      genome_ch
+         .map { tuple( it[1], it[0] ) }
+         .combine( fetch_genome_from_NCBI.out, by: 1 )
+         .map { tuple( it[0], it[2], it[3] ) }
+         .unique()
+         | set { site_references }
+
+      ResolveSites(
+         site_references,
+         file( params.trna_sites, checkIfExists: true ),
+         params.sites_join_on,
+      )
+   }
 
    /*
    ========================================================================================

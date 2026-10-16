@@ -8,7 +8,7 @@ Fontconfig error: No writable cache directories
 	input: filter.filtered.h5ad
 	plot_format: png
 	output: cluster
-	func: <function _cluster at 0x7fe0d2bc77e0>
+	func: <function _cluster at 0x7f74793c77e0>
 AnnData object with n_obs × n_vars = 64 × 17
     obs: 'sample_id', 'n_genes_by_counts', 'log1p_n_genes_by_counts', 'total_counts', 'log1p_total_counts', 'pct_counts_in_top_10_genes', 'total_counts_is_tRNA', 'log1p_total_counts_is_tRNA', 'pct_counts_is_tRNA', 'total_counts_is_protein_coding', 'log1p_total_counts_is_protein_coding', 'pct_counts_is_protein_coding', 'total_counts_is_rRNA', 'log1p_total_counts_is_rRNA', 'pct_counts_is_rRNA', 'tRNA_rRNA_ratio'
     var: 'genome_accession', 'assembly', 'chr', 'gene_id', 'locus_tag', 'Name', 'gene_biotype', 'Length', 'pseudobulk_read_count', 'is_tRNA', 'is_protein_coding', 'is_rRNA', 'n_cells_by_counts', 'mean_counts', 'log1p_mean_counts', 'pct_dropout_by_counts', 'total_counts', 'log1p_total_counts', 'n_cells'
@@ -40,4 +40,4 @@ Plotting heatmap of mean gene markers per cell cluster...
 WARNING: saving figure to file figures/matrixplot_cluster.cluster-gene-markers-mean.png
 Plotting heatmap of gene markers per cell cluster...
 WARNING: saving figure to file figures/heatmapcluster.cluster-gene-markers.png
-⏰ Completed process in 0:00:24.138256
+⏰ Completed process in 0:00:24.176708

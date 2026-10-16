@@ -12,7 +12,7 @@ Fontconfig error: No writable cache directories
 	min_genes: 200
 	plot_format: png
 	output: filter
-	func: <function _filter at 0x7f075f6bb6a0>
+	func: <function _filter at 0x7f0128db36a0>
 Filtering cells with max_cutoff=13...
 Filtering genes with max_cutoff=3...
 /opt/conda/envs/env/lib/python3.11/site-packages/scanpy/preprocessing/_simple.py:293: ImplicitModificationWarning: Trying to modify attribute `.var` of view, initializing view as actual.
@@ -38,8 +38,8 @@ TGCATGCTTGACCAGACTTCC         0.000000        12.441639
 TGCATGCTTGACCATCGGAAT         0.000000         9.010913
 
 [64 rows x 2 columns]
-  0%|          | 0/2 [00:00<?, ?it/s]100%|██████████| 2/2 [00:00<00:00, 143.33it/s]
+  0%|          | 0/2 [00:00<?, ?it/s]100%|██████████| 2/2 [00:00<00:00, 147.53it/s]
 Saving barnyard plots...
 Saving plot at ./filter.genome-counts-after-filter.png
 Saving data at ./filter.genome-counts-after-filter.csv
-⏰ Completed process in 0:00:00.572927
+⏰ Completed process in 0:00:00.577081

@@ -1,4 +1,3 @@
-[0.033s][warning][perf,memops] Cannot use file /tmp/hsperfdata_johnsoe/26 because it is locked by another process (errno = 11)
 Arguments	[bam, --paired, --tag, -i, SOcoord.bam, -o, umicollapse.bam]
 Done reading input file into memory!
 Done with the first pass for tracking clusters!
@@ -11,4 +10,4 @@ Number of unique alignment positions	62
 Average number of UMIs per alignment position	1.8709677419354838
 Max number of UMIs over all alignment positions	4
 Number of groups of reads	116
-UMI collapsing finished in 0.27 seconds!
+UMI collapsing finished in 0.274 seconds!

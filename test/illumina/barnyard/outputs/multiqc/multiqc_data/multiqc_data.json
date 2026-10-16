@@ -3,31 +3,31 @@
     "report_data_sources": {
         "RSeQC": {
             "gene_body_coverage": {
-                "umicollapse": "/nemo/lab/johnsone/home/users/johnsoe/github/nf-sbrnaseq/test/illumina/barnyard/work/99/02475aea6b1c4c445df3e10afb5622/7/gene-body.geneBodyCoverage.txt"
+                "umicollapse": "/nemo/lab/johnsone/home/users/johnsoe/github/nf-sbrnaseq/test/illumina/barnyard/work/09/d55b9329fee4069f0763eba24c374a/7/gene-body.geneBodyCoverage.txt"
             }
         },
         "featureCounts": {
             "all_sections": {
-                "synthetic_illumina": "/nemo/lab/johnsone/home/users/johnsoe/github/nf-sbrnaseq/test/illumina/barnyard/work/99/02475aea6b1c4c445df3e10afb5622/6/synthetic_illumina.featureCounts.tsv.summary"
+                "synthetic_illumina": "/nemo/lab/johnsone/home/users/johnsoe/github/nf-sbrnaseq/test/illumina/barnyard/work/09/d55b9329fee4069f0763eba24c374a/6/synthetic_illumina.featureCounts.tsv.summary"
             }
         },
         "Samtools": {
             "stats": {
-                "synthetic_illumina": "/nemo/lab/johnsone/home/users/johnsoe/github/nf-sbrnaseq/test/illumina/barnyard/work/99/02475aea6b1c4c445df3e10afb5622/10/synthetic_illumina.stats.txt"
+                "synthetic_illumina": "/nemo/lab/johnsone/home/users/johnsoe/github/nf-sbrnaseq/test/illumina/barnyard/work/09/d55b9329fee4069f0763eba24c374a/10/synthetic_illumina.stats.txt"
             },
             "coverage": {
-                "synthetic_illumina": "/nemo/lab/johnsone/home/users/johnsoe/github/nf-sbrnaseq/test/illumina/barnyard/work/99/02475aea6b1c4c445df3e10afb5622/8/synthetic_illumina.tsv"
+                "synthetic_illumina": "/nemo/lab/johnsone/home/users/johnsoe/github/nf-sbrnaseq/test/illumina/barnyard/work/09/d55b9329fee4069f0763eba24c374a/8/synthetic_illumina.tsv"
             }
         },
         "Cutadapt": {
             "all_sections": {
-                "synthetic_illumina_3p": "/nemo/lab/johnsone/home/users/johnsoe/github/nf-sbrnaseq/test/illumina/barnyard/work/99/02475aea6b1c4c445df3e10afb5622/1/synthetic_illumina.3p.cutadapt.log",
-                "synthetic_illumina_5p": "/nemo/lab/johnsone/home/users/johnsoe/github/nf-sbrnaseq/test/illumina/barnyard/work/99/02475aea6b1c4c445df3e10afb5622/2/synthetic_illumina.5p.cutadapt.log"
+                "synthetic_illumina_3p": "/nemo/lab/johnsone/home/users/johnsoe/github/nf-sbrnaseq/test/illumina/barnyard/work/09/d55b9329fee4069f0763eba24c374a/1/synthetic_illumina.3p.cutadapt.log",
+                "synthetic_illumina_5p": "/nemo/lab/johnsone/home/users/johnsoe/github/nf-sbrnaseq/test/illumina/barnyard/work/09/d55b9329fee4069f0763eba24c374a/2/synthetic_illumina.5p.cutadapt.log"
             }
         },
         "FastQC": {
             "all_sections": {
-                "synthetic_illumina": "/nemo/lab/johnsone/home/users/johnsoe/github/nf-sbrnaseq/test/illumina/barnyard/work/99/02475aea6b1c4c445df3e10afb5622/3/synthetic_illumina_fastqc.zip"
+                "synthetic_illumina": "/nemo/lab/johnsone/home/users/johnsoe/github/nf-sbrnaseq/test/illumina/barnyard/work/09/d55b9329fee4069f0763eba24c374a/3/synthetic_illumina_fastqc.zip"
             }
         }
     },
@@ -462,7 +462,7 @@
             }
         }
     },
-    "report_creation_date": "2026-10-16, 17:02 BST",
+    "report_creation_date": "2026-10-16, 17:40 BST",
     "report_plot_data": {
         "rseqc_gene_body_coverage_plot": {
             "id": "rseqc_gene_body_coverage_plot",
@@ -14663,11 +14663,11 @@
     "config_subtitle": null,
     "config_title": null,
     "config_version": "1.34",
-    "config_output_dir": "/nemo/lab/johnsone/home/users/johnsoe/github/nf-sbrnaseq/test/illumina/barnyard/work/99/02475aea6b1c4c445df3e10afb5622",
+    "config_output_dir": "/nemo/lab/johnsone/home/users/johnsoe/github/nf-sbrnaseq/test/illumina/barnyard/work/09/d55b9329fee4069f0763eba24c374a",
     "config_sample_names_rename": [],
     "config_sample_names_rename_buttons": [],
     "config_analysis_dir_abs": [
-        "/nemo/lab/johnsone/home/users/johnsoe/github/nf-sbrnaseq/test/illumina/barnyard/work/99/02475aea6b1c4c445df3e10afb5622"
+        "/nemo/lab/johnsone/home/users/johnsoe/github/nf-sbrnaseq/test/illumina/barnyard/work/09/d55b9329fee4069f0763eba24c374a"
     ],
     "report_saved_raw_data": {
         "rseqc_gene_body_cov": {

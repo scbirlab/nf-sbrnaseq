@@ -52,4 +52,6 @@ nextflow run "$REPO" \
     --outputs "$outdir" \
     --trim_qual 5 \
     --min_length '9:38' \
+    --mod_sites "$HERE/illumina/tra-mod/trna-sites.tsv" \
+    --sites_join_on gene_biotype \
     --strand 1
