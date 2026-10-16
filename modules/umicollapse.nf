@@ -133,7 +133,7 @@ process UMIcollapse {
       "${params.outputs}/umicollapse/logs", 
       mode: 'copy',
       pattern: "*.log",
-      saveAs: { "${id}.${bamfile.simpleName}.${it}" }
+      saveAs: { "${id}.${bamfile.simpleName}.${it}" },
    )
    
    input:
@@ -171,10 +171,10 @@ process UMIcollapse {
 
    java \
       -Xmx${Math.round(task.memory.getGiga() * 0.8)}G \
-      -Xss1024m \
+      -Xss8m \
       -jar \
          "${umicollapse_repo}/umicollapse.jar" \
-         bam ${(paired || (!nanopore)) ? "--paired" : ""} \
+         bam ${paired ? "--paired" : ""} \
          --tag \
          -i SOcoord.bam \
          -o umicollapse.bam \
@@ -215,7 +215,7 @@ process Concat_UMIcollapse {
    shopt -s nullglob
    shards=(bamfiles-*/dedup.bam)
 
-   if [ \${#shards[@]} -gt 0 ]; then
+   if [ \${#shards[@]} -gt 0 ]
    then
       samtools merge -@${task.cpus} \
          -h "${original_bam}" \

@@ -62,25 +62,37 @@ process join_featurecounts_UMItools {
    print_err(
       f"Merging on {set(featurecounts_df.columns).intersection(set(df_in.columns))}"
    )
-   key = ["gene_id", "chr"]
+   
+   key = ["sample_id", "chr", "gene_id"]
+   cell_key = key + ["cell_barcode"]
 
-   assert not featurecounts_df.duplicated(key).any()
-   assert not df_in.duplicated(key + ["cell_barcode"]).any()
+   if featurecounts_df.duplicated(key).any():
+      raise ValueError("Duplicate feature annotations")
 
-   df_out = (
-      df_in
-      .merge(
-         featurecounts_df,
-         on=["sample_id", "chr", "gene_id"],
-         how="right",
-         validate="one_to_many",
-      )
-      .drop_duplicates()
-      .assign(
-         umi_count=lambda x: x["umi_count"].fillna(0).astype(int),
-         read_count=lambda x: x["read_count"].fillna(0).astype(int),
-      )
+   if df_in.duplicated(cell_key).any():
+      raise ValueError("Duplicate cell-gene count rows")
+
+   df_out = df_in.merge(
+      featurecounts_df,
+      on=key,
+      how="left",
+      validate="many_to_one",
+      indicator=True,
    )
+
+   if (df_out["_merge"] != "both").any():
+      missing = df_out.loc[df_out["_merge"] != "both", key]
+      raise ValueError(
+         f"Missing annotations for {len(missing)} count rows:\\n"
+         f"{missing.head(10)}"
+      )
+
+   if len(df_out) != len(df_in):
+      raise ValueError("Count-table join changed row cardinality")
+
+   df_out = df_out.drop(columns="_merge")
+   df_out["umi_count"] = df_out["umi_count"].astype(int)
+   df_out["read_count"] = df_out["read_count"].astype(int)
 
    df_out.to_csv("all-counts.tsv", sep="\\t", index=False)
 

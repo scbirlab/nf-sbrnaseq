@@ -127,6 +127,8 @@ process bam2table {
 
    script:
    """
+   set -eoux pipefail 
+   
    samtools view -h \
       -@${task.cpus} \
       -F${paired ? "1664 -f3" : "1536"} \
@@ -156,11 +158,12 @@ process bam2table {
    ' \
    > tab.tsv
 
-   NUNIQUE="\$(cut -f1 | sort -u  | wc -l < tab.tsv)
-   NLINES="\$(wc -l < tab.tsv)
+   NUNIQUE="\$(tail -n+2 tab.tsv | cut -f1 | sort -u | wc -l)"
+   NLINES="\$(tail -n+2 tab.tsv | wc -l)"
    if [ "\$NLINES" -gt "\$NUNIQUE" ]
    then
       >&2 echo "Read IDs are not unique: n lines = \$NLINES; unique read IDs = \$NUNIQUE."
+      exit 1
    fi
 
    rm filtered.bam

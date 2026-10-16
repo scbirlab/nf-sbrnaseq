@@ -20,6 +20,8 @@ process build_AnnData {
 
    script:
    """
+   set -euox pipefail
+
    export MPLCONFIGDIR="mpl"
    export NUMBA_CACHE_DIR="numba"
    mkdir "\$MPLCONFIGDIR" "\$NUMBA_CACHE_DIR"
@@ -49,6 +51,8 @@ process filter_AnnData {
 
    script:
    """
+   set -euox pipefail
+
    export MPLCONFIGDIR="mpl"
    export NUMBA_CACHE_DIR="numba"
    mkdir "\$MPLCONFIGDIR" "\$NUMBA_CACHE_DIR"
@@ -82,6 +86,8 @@ process cluster_cells {
 
    script:
    """
+   set -euox pipefail
+   
    export MPLCONFIGDIR="mpl"
    export NUMBA_CACHE_DIR="numba"
    mkdir "\$MPLCONFIGDIR" "\$NUMBA_CACHE_DIR"
