@@ -12,6 +12,7 @@ dependencies:
     - bioconda::bowtie2
     - bioconda::fastqc
     - bioconda::minimap2
+    - bioconda::paraclu
     - bioconda::perl-uri
     - bioconda::samtools
     - bioconda::seqtk
