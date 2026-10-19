@@ -14,8 +14,7 @@ process ResolveSites {
     val join_on
 
     output:
-    tuple val(id), path("resolved-sites.tsv"),
-        emit: main
+    tuple val( id ), path( "resolved-sites.tsv" )
 
     script:
     """

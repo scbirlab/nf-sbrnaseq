@@ -29,16 +29,17 @@ case "$EXPT" in
   *) echo 'Experiment must be ecoli, bsub, or barnyard' >&2; exit 2 ;;
 esac
 
-# Always regenerate reads AND the design manifest together. The generator
-# reads pinned NCBI references, cached on the first execution.
-GENERATOR=(python3 "$HERE/scripts/generate_fixture.py" --mode "$EXPT" --output-dir "$HERE/illumina/$EXPT")
-if [[ -n "${SBRNASEQ_REFERENCE_DIR:-}" ]]; then
-  GENERATOR+=(--reference-dir "$SBRNASEQ_REFERENCE_DIR")
+if [ ! -d "$HERE/illumina/$EXPT/fastq/" ]
+then
+  GENERATOR=(python3 "$HERE/scripts/generate_fixture.py" --mode "$EXPT" --output-dir "$HERE/illumina/$EXPT")
+  if [[ -n "${SBRNASEQ_REFERENCE_DIR:-}" ]]; then
+    GENERATOR+=(--reference-dir "$SBRNASEQ_REFERENCE_DIR")
+  fi
+  if [[ "${SBRNASEQ_NO_DOWNLOAD:-0}" == 1 ]]; then
+    GENERATOR+=(--no-download)
+  fi
+  "${GENERATOR[@]}"
 fi
-if [[ "${SBRNASEQ_NO_DOWNLOAD:-0}" == 1 ]]; then
-  GENERATOR+=(--no-download)
-fi
-"${GENERATOR[@]}"
 
 nextflow run "$REPO" \
     -resume \
@@ -53,5 +54,5 @@ nextflow run "$REPO" \
     --trim_qual 5 \
     --min_length '9:38' \
     --mod_sites "$HERE/illumina/trna-mod/trna-sites.tsv" \
-    --sites_join_on gene_biotype \
+    --sites_join_on feature \
     --strand 1

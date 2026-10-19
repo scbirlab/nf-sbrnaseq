@@ -41,6 +41,7 @@ include {
    minimap_index; 
    minimap_align;
 } from './modules/minimap.nf'
+include { CountModSites } from './modules/modifications.nf'
 include { 
    fetch_genome_from_NCBI; 
    prefetch_from_SRA;
@@ -292,23 +293,22 @@ workflow {
    genome_ch
       .map { v -> v[1..0] }  // genome_acc, sample_id
       .combine( fetch_genome_from_NCBI.out, by: 0 )  // genome_acc, sample_id, genome, gff
+      .tap { pre_site_ref }
       .map { v -> tuple( v[1], v[-1] ) }  // sample_id, gff
       .unique()
       .set { genome_gff }
 
    if ( params.mod_sites ) {
 
-      genome_ch
-         .map { tuple( it[1], it[0] ) }
-         .combine( fetch_genome_from_NCBI.out, by: 1 )
-         .map { tuple( it[0], it[2], it[3] ) }
+      pre_site_ref
+         .map { v -> tuple( v[0], v[2], v[3] ) }  // genome_acc, genome, gff
          .unique()
-         | set { site_references }
+         .set { site_references }
 
       ResolveSites(
          site_references,
-         file( params.mod_sites, checkIfExists: true ),
-         params.sites_join_on,
+         Channel.value( file( params.mod_sites, checkIfExists: true ) ),
+         Channel.value( params.sites_join_on ),
       )
    }
 
@@ -460,7 +460,7 @@ workflow {
    Prepend_Barcode(
       mapped_reads.main
          | remove_multimappers,
-      Channel.value( !params.unpaired && !params.nanopore ),
+      Channel.value( !params.unpaired ),
       Channel.value( params.nanopore ),
 
    )
@@ -486,6 +486,26 @@ workflow {
          & SAMtools_flagstat
          & DeduplicateMolecules
       )
+
+   if ( params.mod_sites ) {
+       CountModSites(
+         DeduplicateMolecules.out  // id, bam, bai
+            .combine(
+               pre_site_ref   // genome_acc, sample_id, genome, gff
+                  .map { v -> v[1..0] },
+               by: 0,
+
+            )  // id, bam, bai, genome_acc
+            .map { v -> tuple( v[-1], v[0], v[1], v[2] ) } // genome_acc, id, bam, bai, 
+            .combine( 
+               ResolveSites.out, // genome_acc, sites
+               by: 0,
+            )  // genome_acc, id, bam, bai, sites
+         .map { v -> v[1..-1] },
+         Channel.value( params.mod_min_mapq ),
+         Channel.value( params.mod_min_baseq ),
+       )
+   }
    SAMtools_stats.out | plot_bamstats
 
    Concat_UMIcollapse.out.main

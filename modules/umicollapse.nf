@@ -42,7 +42,7 @@ process Prepend_Barcode {
    """
    set -euox pipefail
 
-   samtools view -h ${paired ? "" : "-f128"} "${bamfile[1]}" \
+   samtools view -h ${(paired || nanopore) ? "" : "-f128"} "${bamfile[1]}" \
    | awk -F'\\t' -v OFS='\\t' '
       /^@/ { print; next }
       !/^@/ {
@@ -281,9 +281,7 @@ process DeduplicateMolecules {
     tuple val( id ), path( bam )
 
     output:
-    tuple val( id ), path( "${id}.molecules.bam" ),
-        path( "${id}.molecules.bam.bai" ),
-        emit: main
+    tuple val( id ), path( "${id}.molecules.bam" ), path( "${id}.molecules.bam.bai" )
 
     script:
     """
@@ -304,6 +302,7 @@ process DeduplicateMolecules {
         "${id}.molecules.bam"
 
     samtools quickcheck -v "${id}.molecules.bam"
+
     """
 }
 
