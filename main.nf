@@ -35,6 +35,7 @@ include {
    bam2wig;
    plot_peaks;
 } from './modules/deeptools.nf'
+include { ExtractMoleculeEnds } from './modules/ends.nf'
 include { featurecounts } from './modules/featurecounts.nf'
 include { multiQC } from './modules/multiqc.nf'
 include { 
@@ -495,6 +496,21 @@ workflow {
          & SAMtools_flagstat
          & DeduplicateMolecules
       )
+
+   
+    if ( params.end5_enabled ) {
+
+       ExtractMoleculeEnds(
+          DeduplicateMolecules.out,
+          Channel.value( params.end5_read ),
+          Channel.value( params.end5_boundary ),
+          Channel.value( params.strand ),
+          Channel.value( params.min_mapq ),
+          Channel.value( !params.end5_include_softclip ),
+       )
+
+    }
+
 
    if ( params.mod_sites ) {
        CountModSites(
