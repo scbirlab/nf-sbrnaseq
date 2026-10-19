@@ -29,7 +29,7 @@ case "$EXPT" in
   *) echo 'Experiment must be ecoli, bsub, or barnyard' >&2; exit 2 ;;
 esac
 
-if [ "$EXPT" == "multimap"]
+if [ "$EXPT" == "multimap" ]
 then
   EXPT="$EXPT"-multimap
   MM_FLAG="--allow_multimap"
