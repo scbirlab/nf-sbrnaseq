@@ -1,2 +1,0 @@
-Sample	Reads	Bases	Coverage	Mean depth	Mean BQ	Mean MQ
-synthetic_illumina	0.002986	0.00134	0.028869	0.0450314	40.0	255.0

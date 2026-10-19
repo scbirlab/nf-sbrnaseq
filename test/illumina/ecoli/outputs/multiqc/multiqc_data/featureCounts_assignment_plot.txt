@@ -1,2 +1,0 @@
-Sample	Assigned
-synthetic_illumina	1706.0

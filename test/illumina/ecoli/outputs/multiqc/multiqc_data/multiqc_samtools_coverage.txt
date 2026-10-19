@@ -1,2 +1,0 @@
-Sample	NC_000913.3
-synthetic_illumina	{'startpos': 1, 'endpos': 4641652, 'numreads': 2986, 'covbases': 1340, 'coverage': 0.028869, 'meandepth': 0.0450314, 'meanbaseq': 40.0, 'meanmapq': 255.0, 'size': 4641652}

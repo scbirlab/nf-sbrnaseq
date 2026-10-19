@@ -1,2 +1,0 @@
-Sample	Top overrepresented sequence	Sum of remaining overrepresented sequences
-synthetic_illumina	0.3246753246753247	44.96753246753233

@@ -1,3 +1,0 @@
-Sample	cutadapt_version	pairs_processed	r1_with_adapters	r2_with_adapters	pairs_too_short	pairs_written	bp_processed	quality_trimmed	bp_written	percent_trimmed
-synthetic_illumina_3p	5.2	1917	1917	1917	0	1917	394902	0	364230	7.766990291262135
-synthetic_illumina_5p	5.2	1917	1917	1917	0	1917	364230		364230	0.0

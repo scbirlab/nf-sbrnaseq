@@ -1,2 +1,0 @@
-Sample	0	1
-synthetic_illumina	('NC_000913.3', 255.0)	('NC_000964.3', 255.0)

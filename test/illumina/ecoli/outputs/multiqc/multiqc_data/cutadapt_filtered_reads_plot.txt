@@ -1,3 +1,0 @@
-Sample	Pairs passing filters
-synthetic_illumina_3p	1917.0
-synthetic_illumina_5p	1917.0

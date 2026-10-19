@@ -1,3 +1,0 @@
-Sample	Pairs passing filters	Pairs that were too short
-synthetic_illumina_3p	2155.0	1.0
-synthetic_illumina_5p	2155.0	0.0

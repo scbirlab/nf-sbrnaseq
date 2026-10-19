@@ -42,7 +42,7 @@ process Prepend_Barcode {
    """
    set -euox pipefail
 
-   samtools view -h ${(paired || nanopore) ? "" : "-f128"} "${bamfile[1]}" \
+   samtools view -h ${paired ? "" : "-f128"} "${bamfile[1]}" \
    | awk -F'\\t' -v OFS='\\t' '
       /^@/ { print; next }
       !/^@/ {
@@ -97,7 +97,7 @@ process Shard_for_UMIcollapse {
             break 
          }
          if(cb == "") next
-         prefix = substr(cb, 1, 12); 
+         prefix = substr(cb, 1, 8); 
          if(prefix == "") prefix = "_no-prefix"
          print >> (dir "/shard-" prefix ".sam")
       }

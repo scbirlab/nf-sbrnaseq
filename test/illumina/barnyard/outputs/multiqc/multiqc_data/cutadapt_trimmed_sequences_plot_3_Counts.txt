@@ -1,3 +1,0 @@
-Sample	0	1
-synthetic_illumina_3p - First read: Adapter 1	(8, 2146)	(12, 10)
-synthetic_illumina_3p - Second read: Adapter 2	(8, 2155)	(88, 1)
