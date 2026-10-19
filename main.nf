@@ -433,6 +433,7 @@ workflow {
 
       STAR_align(
          pre_mapper,
+         Channel.value( params.max_multimaps ),
          Channel.value( params.strand ),
       )
          | set { mapped_reads }
@@ -441,8 +442,10 @@ workflow {
 
    else if ( params.mapper == "bowtie2" ) {
 
-      pre_mapper
-         | bowtie2_align
+      bowtie2_align(
+         pre_mapper,
+         Channel.value( params.max_multimaps ),
+      )
          | set { mapped_reads }
 
    } 
@@ -451,15 +454,21 @@ workflow {
 
       minimap_align(
          pre_mapper,
+         Channel.value( params.max_multimaps ),
          Channel.value( params.nanopore ),
 
       )
          | set { mapped_reads }
 
    }
+   remove_multimappers(
+      mapped_reads.main,
+      Channel.value( params.mapper ),
+      Channel.value( params.min_mapq ),
+      Channel.value( !params.allow_multimap ),
+   )
    Prepend_Barcode(
-      mapped_reads.main
-         | remove_multimappers,
+      remove_multimappers.out,
       Channel.value( !params.unpaired ),
       Channel.value( params.nanopore ),
 

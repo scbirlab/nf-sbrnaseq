@@ -28,7 +28,7 @@ process minimap_align {
    // maxRetries 1
 
    publishDir( 
-      "${params.outputs}/mapped", 
+      "${params.outputs}/mapped/minimap2", 
       mode: 'copy',
       // saveAs: { "${id}.${it}" },
       pattern: "*.{bam,log}"
@@ -36,6 +36,7 @@ process minimap_align {
 
    input:
    tuple val( id ), path( reads ), path( idx ), val( genome_acc )
+   val max_multimaps
    val nanopore
 
    output:
@@ -44,10 +45,12 @@ process minimap_align {
 
    script:
    """
-   minimap2 -a -c -2 --MD \
-      -x ${nanopore ? 'map-ont' : 'sr --frag=yes'} \
-      ${idx} ${reads} \
-      -o "${id}.minimap2.sam" \
+   minimap2 -a -c -2 --MD \\
+      -N ${max_multimaps} \\
+      --secondary=yes \\
+      -x ${nanopore ? 'map-ont' : 'sr --frag=yes'} \\
+      ${idx} ${reads} \\
+      -o "${id}.minimap2.sam" \\
    2> ${id}.minimap2.log
    samtools view -bS "${id}.minimap2.sam" -o "${id}.minimap2.bam"
    rm "${id}.minimap2.sam"

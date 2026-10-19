@@ -5,6 +5,7 @@ HERE="$(readlink -f "$(dirname "${BASH_SOURCE[0]}")")"
 REPO="$(readlink -f  "$HERE/..")"
 PROFILE="${1:-gh}"
 EXPT="${2:-ecoli}"
+MM="${3:-no}"
 
 case "$PROFILE" in
   gh)    
@@ -20,14 +21,24 @@ case "$PROFILE" in
   local) EXTRA="-with-conda" ;;
   *) echo 'Usage: run-tests-illumina.sh [gh|crick|local] [ecoli|barnyard]' >&2; exit 2 ;;
 esac
-sheet="$HERE/illumina/$EXPT/sample-sheet.csv"
-outdir="$HERE/illumina/$EXPT/outputs"
+
 case "$EXPT" in
   ecoli) : ;;
   bsub) : ;;
   barnyard) : ;;
   *) echo 'Experiment must be ecoli, bsub, or barnyard' >&2; exit 2 ;;
 esac
+
+if [ "$EXPT" == "multimap"]
+then
+  EXPT="$EXPT"-multimap
+  MM_FLAG="--allow_multimap"
+else
+  MM_FLAG=
+fi
+mkdir -p "$HERE/illumina/$EXPT"
+sheet="$HERE/illumina/$EXPT/sample-sheet.csv"
+outdir="$HERE/illumina/$EXPT/outputs"
 
 if [ ! -d "$HERE/illumina/$EXPT/fastq/" ]
 then
@@ -46,7 +57,7 @@ nextflow run "$REPO" \
     -profile "$PROFILE" "$EXTRA" \
     -work-dir "$HERE/illumina/$EXPT/work" \
     -with-dag "$HERE/illumina/$EXPT/dag.html" \
-    --mapper star \
+    --mapper star "$MM_FLAG"\
     --sample_sheet "$sheet" \
     --inputs "$HERE/illumina/$EXPT/inputs" \
     --fastq_dir "$HERE/illumina/$EXPT/fastq" \

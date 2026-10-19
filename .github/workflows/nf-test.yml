@@ -35,3 +35,7 @@ jobs:
       run: |
         set -x
         bash test/run-tests-illumina.sh gh barnyard
+    - name: Test Nextflow pipeline - Multimap
+      run: |
+        set -x
+        bash test/run-tests-illumina.sh gh ecoli multimap
