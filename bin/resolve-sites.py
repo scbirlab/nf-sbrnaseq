@@ -125,26 +125,31 @@ def main():
             )
         ]
 
-    mismatched = [
-        observed != expected
+    
+    # Select sites whose actual genomic base matches the
+    # requested reference base in the correct orientation.
+    matched = [
+        observed == expected
         for observed, expected in zip(
             actual, merged["genomic_ref"]
         )
     ]
-    if any(mismatched):
-        bad = merged.loc[
-            mismatched,
-            ["contig", "pos1", "genomic_ref",
-             "ref_base", "strand"]
-        ].copy()
-        bad["observed_ref"] = [
-            a for a, bad_row in zip(actual, mismatched)
-            if bad_row
-        ]
-        raise ValueError(
-            "Reference mismatches:\n"
-            + bad.to_string(index=False)
+
+    n_skipped = len(matched) - sum(matched)
+    if n_skipped:
+        print(
+            f"Skipped {n_skipped} sites with a different "
+            "reference nucleotide",
+            file=sys.stderr,
         )
+
+    merged = merged.loc[matched].copy()
+
+    if merged.empty:
+        raise ValueError(
+            "No candidate sites match the requested reference base"
+        )
+
 
     # Stable and unique within this reference annotation.
     merged["site_id"] = [
