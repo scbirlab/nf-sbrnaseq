@@ -11,12 +11,20 @@ import pysam
 import streq
 
 BASES = "ACGT"
+
 COUNT_COLUMNS = [
     "sample_id", "cell_barcode",
     "count_A", "count_C", "count_G", "count_T",
     "ref_count", "alt_count", "other_count",
     "callable_depth", "alt_fraction",
+    "mapping_primary_reads",
+    "mapping_confident_reads",
+    "mapping_confident_fraction",
+    "mapping_multihit_reads",
+    "mapping_multihit_fraction",
+    "mapping_min_mapq",
 ]
+
 
 
 def load_sites(filename):
@@ -152,6 +160,22 @@ def main():
     parser.add_argument("--output", required=True)
     parser.add_argument("--min-mapq", type=int, default=20)
     parser.add_argument("--min-baseq", type=int, default=25)
+
+    parser.add_argument("--raw-bam", required=True)
+    parser.add_argument(
+        "--mapper",
+        required=True,
+        choices=("star", "bowtie2", "minimap2"),
+    )
+    parser.add_argument(
+        "--mapping-min-mapq", type=int, required=True
+    )
+    parser.add_argument(
+        "--allow-multimap",
+        type=lambda x: x.lower() == "true",
+        required=True,
+    )
+
     args = parser.parse_args()
 
     if args.min_mapq < 0 or args.min_baseq < 0:
@@ -161,7 +185,9 @@ def main():
     output_columns = COUNT_COLUMNS + metadata_columns
 
     nrows = 0
+    
     with pysam.AlignmentFile(args.bam, "rb") as bam, \
+         pysam.AlignmentFile(args.raw_bam, "rb") as raw_bam, \
          gzip.open(args.output, "wt", newline="") as handle:
 
         writer = csv.DictWriter(
@@ -177,6 +203,13 @@ def main():
 
             counts = count_site(
                 bam, site, args.min_mapq, args.min_baseq
+            )
+            qc = mapping_qc(
+                raw_bam,
+                site,
+                args.mapper,
+                args.mapping_min_mapq,
+                args.allow_multimap,
             )
 
             for cell, bases in sorted(counts.items()):
@@ -199,6 +232,7 @@ def main():
                         alt / (ref + alt)
                         if ref + alt > 0 else ""
                     ),
+                    **qc,
                     **site,
                 }
                 writer.writerow(row)
@@ -208,6 +242,71 @@ def main():
         f"Counted {len(sites)} sites; "
         f"wrote {nrows} covered cell-site rows"
     )
+
+
+
+def mapping_qc(
+    raw_bam, site, mapper, min_mapq, allow_multimap
+):
+    """Observed read-alignment confidence at a genomic site.
+
+    Counts alignment records, not deduplicated molecules.
+    Excludes unmapped, secondary, QC-failed and
+    supplementary alignments.
+    """
+    pos0 = site["pos1"] - 1
+
+    primary = 0
+    confident = 0
+    multihit = 0
+    nh_known = 0
+
+    for read in raw_bam.fetch(
+        site["contig"], pos0, pos0 + 1
+    ):
+        if read.flag & 2820:
+            # 0x4 unmapped, 0x100 secondary,
+            # 0x200 QC fail, 0x800 supplementary
+            continue
+
+        # Only alignments with a base at the site.
+        if not any(
+            refpos == pos0
+            for _, refpos in read.get_aligned_pairs(
+                matches_only=True
+            )
+        ):
+            continue
+
+        primary += 1
+
+        nh = read.get_tag("NH") if read.has_tag("NH") else None
+        if nh is not None:
+            nh_known += 1
+            if nh > 1:
+                multihit += 1
+
+        passes = read.mapping_quality >= min_mapq
+
+        # Match the current downstream filter policy.
+        if mapper == "star" and not allow_multimap:
+            passes = passes and nh == 1
+
+        if passes:
+            confident += 1
+
+    return {
+        "mapping_primary_reads": primary,
+        "mapping_confident_reads": confident,
+        "mapping_confident_fraction": (
+            confident / primary if primary else ""
+        ),
+        "mapping_multihit_reads": multihit,
+        "mapping_multihit_fraction": (
+            multihit / nh_known if nh_known else ""
+        ),
+        "mapping_min_mapq": min_mapq,
+    }
 
 
 if __name__ == "__main__":

@@ -510,9 +510,13 @@ workflow {
                ResolveSites.out, // genome_acc, sites
                by: 0,
             )  // genome_acc, id, bam, bai, sites
-         .map { v -> v[1..-1] },
+            .map { v -> v[1..-1] }
+            .combine( mapped_reads.main, by: 0 ),  // id, bam, bai, sites, mapped_bam, mapped_bai
          Channel.value( params.mod_min_mapq ),
          Channel.value( params.mod_min_baseq ),
+         Channel.value( params.mapper ),
+         Channel.value( params.min_mapq ),
+         Channel.value( params.allow_multimap ),
        )
    }
    SAMtools_stats.out | plot_bamstats
