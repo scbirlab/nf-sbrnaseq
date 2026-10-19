@@ -35,7 +35,11 @@ include {
    bam2wig;
    plot_peaks;
 } from './modules/deeptools.nf'
-include { ExtractMoleculeEnds } from './modules/ends.nf'
+include {
+    ExtractMoleculeEnds;
+    ClusterMoleculeEnds;
+    AnnotateEndLoci;
+} from './modules/ends.nf'
 include { featurecounts } from './modules/featurecounts.nf'
 include { multiQC } from './modules/multiqc.nf'
 include { 
@@ -497,17 +501,44 @@ workflow {
          & DeduplicateMolecules
       )
 
+   fetch_genome_from_NCBI.out
+      .map { v -> tuple( v[0], v[2] ) }
+      .unique()
+      .tap { gff_ch }
+      | gff2bed
    
     if ( params.end5_enabled ) {
 
-       ExtractMoleculeEnds(
-          DeduplicateMolecules.out,
-          Channel.value( params.end5_read ),
-          Channel.value( params.end5_boundary ),
-          Channel.value( params.strand ),
-          Channel.value( params.min_mapq ),
-          Channel.value( !params.end5_include_softclip ),
+      ExtractMoleculeEnds(
+         DeduplicateMolecules.out,
+         Channel.value( params.end5_read ),
+         Channel.value( params.end5_boundary ),
+         Channel.value( params.strand ),
+         Channel.value( params.min_mapq ),
+         Channel.value( !params.end5_include_softclip ),
+      ) // id, ends
+
+      ExtractMoleculeEnds.out
+         .combine(
+            pre_site_ref   // genome_acc, sample_id, genome, gff
+               .map { v -> v[1..0] },
+            by: 0,
+         )  // id, ends, genome_acc
+         .map { v -> tuple( v[-1], v[1] ) }  // genome_acc, ends, 
+         .groupTuple( by: 0 )  // genome_acc, [ends, ...]
+         .set { all_ends }
+
+      ClusterMoleculeEnds(
+         all_ends,
+         Channel.value( params.end5_min_support ),
+         Channel.value( params.end5_max_width ),
        )
+
+      AnnotateEndLoci(
+         ClusterMoleculeEnds.out.loci
+            .combine( gff_ch, by: 0 ),
+      )
+
 
     }
 
@@ -519,7 +550,6 @@ workflow {
                pre_site_ref   // genome_acc, sample_id, genome, gff
                   .map { v -> v[1..0] },
                by: 0,
-
             )  // id, bam, bai, genome_acc
             .map { v -> tuple( v[-1], v[0], v[1], v[2] ) } // genome_acc, id, bam, bai, 
             .combine( 
@@ -550,11 +580,6 @@ workflow {
       Channel.value( params.label ),
       Channel.value( params.unpaired ),
    )
-
-   collapsed
-      .map { tuple( it[0], it[2] ) }
-      .unique()
-      | gff2bed
 
    collapsed
       .map { tuple( it[0], it[1] ) }
