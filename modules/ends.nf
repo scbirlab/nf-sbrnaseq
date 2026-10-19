@@ -81,7 +81,7 @@ process ClusterMoleculeEnds {
             }
         }
     ' \\
-    | sort -k1,1 -k3n \\
+    | sort -k1,1 -k2,2 -k3,3n \\
     > paraclu-input.tsv
 
     if [ "\$(wc -l < paraclu-input.tsv)" -gt 0 ]
@@ -125,7 +125,8 @@ process AnnotateEndLoci {
 
     grep -v '^#' "${gff}" \\
     | awk -v OFS='\\t' \\
-        '\$3 == "gene" {
+        '\$3 == "gene" && NF == 9 &&
+        (\$7 == "+" || \$7 == "-") {
             print \$1, \$4-1, \$5, \$9, \$6, \$7
         }' \\
     > "features.bed"
@@ -133,7 +134,7 @@ process AnnotateEndLoci {
     bedtools closest \\
         -a "${loci_bed}" \\
         -b "features.bed" \\
-        -s -D a -t first \\
+        -s -D a -t all \\
     > annotated.bed
 
     python ${projectDir}/bin/annotate-end-loci.py \\
