@@ -57,7 +57,11 @@ process filter_AnnData {
    export NUMBA_CACHE_DIR="numba"
    mkdir "\$MPLCONFIGDIR" "\$NUMBA_CACHE_DIR"
 
-   python ${projectDir}/bin/anndata-utils.py filter "${anndata}" -o filter 2> >(tee filter.log)
+   python ${projectDir}/bin/anndata-utils.py filter "${anndata}" \\
+      --min-counts-per-cell ${params.min_counts_per_cell} \\
+      --min-cells-per-gene ${params.min_cells_per_gene} \\
+      -o filter \\
+   2> >(tee filter.log)
 
 
    """

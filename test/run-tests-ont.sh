@@ -32,4 +32,6 @@ nextflow run "$script_dir"/.. \
     --end5_enabled \
     --end5_read 1 \
     --end5_boundary 5 \
+    --min_counts_per_cell 1 \
+    --min_cells_per_gene 1 \
     --outputs "$script_dir"/ont/outputs
