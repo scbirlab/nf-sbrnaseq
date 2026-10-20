@@ -7,7 +7,7 @@ import sys
 
 
 COLUMNS = [
-    "locus_id",
+    "end5_locus_id",
     "contig",
     "start1",
     "end1",

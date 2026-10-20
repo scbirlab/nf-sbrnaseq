@@ -1,0 +1,91 @@
+
+process BuildEnd5AnnData {
+
+    tag "${id}"
+    label 'some_mem'
+
+    publishDir(
+        "${params.outputs}/mudata",
+        mode: 'copy',
+        saveAs: { "${id}.${it}" },
+    )
+
+    input:
+    tuple val( id ), path( counts ), path( qc ), path( loci )
+
+    output:
+    tuple val( id ), path( "end5.h5ad" )
+
+    script:
+    """
+    set -euo pipefail
+
+    python ${projectDir}/bin/anndata/build-end5-anndata.py \\
+        --counts "${counts}" \\
+        --qc "${qc}" \\
+        --loci "${loci}" \\
+        --sample-id "${id}" \\
+        --output end5.h5ad
+    """
+}
+
+
+process BuildModAnnData {
+
+    tag "${id}"
+    label 'some_mem'
+
+    publishDir(
+        "${params.outputs}/mudata",
+        mode: 'copy',
+        saveAs: { "${id}.${it}" },
+    )
+
+    input:
+    tuple val( id ), path( counts )
+
+    output:
+    tuple val( id ), path( "mod.h5ad" )
+
+    script:
+    """
+    set -euo pipefail
+
+    python ${projectDir}/bin/anndata/build-mod-anndata.py \\
+        --counts "${counts}" \\
+        --sample-id "${id}" \\
+        --output mod.h5ad
+    """
+}
+
+
+process BuildMuData {
+
+    tag "${id}"
+    label 'some_mem'
+
+    publishDir(
+        "${params.outputs}/mudata",
+        mode: 'copy',
+        saveAs: { "${id}.h5mu" },
+    )
+
+    input:
+    tuple val( id ), path( rna ), path( h5ads, stageAs: "modalities/*" )
+
+    output:
+    tuple val( id ), path( "sample.h5mu" )
+
+    script:
+    """
+    set -euox pipefail
+
+    test -f build.h5ad
+
+    python ${projectDir}/bin/anndata/build-mudata.py \\
+        --rna "${rna}" \\
+        --mod modalities/*.h5ad \\
+        --sample-id "${id}" \\
+        --output sample.h5mu
+    """
+}

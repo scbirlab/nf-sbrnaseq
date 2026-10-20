@@ -48,6 +48,11 @@ include {
    minimap_align;
 } from './modules/minimap.nf'
 include { CountModSites } from './modules/modifications.nf'
+include {
+    BuildEnd5AnnData;
+    BuildModAnnData;
+    BuildMuData;
+} from './modules/mudata.nf'
 include { 
    fetch_genome_from_NCBI; 
    prefetch_from_SRA;
@@ -547,13 +552,30 @@ workflow {
             by: 0,
          )  // genome_acc, id, ends, loci
          .map { v -> v[1..3] }
-         | AssignEndLoci
+         | AssignEndLoci  // id, ends
+
+      AssignEndLoci.out.counts
+         .combine( AssignEndLoci.out.qc, by: 0 )
+         .combine(
+            id_ends_genome_ch
+               .map { v -> tuple( v[0], v[2] ) }
+               .unique(),
+            by: 0,
+         )  // id, counts, qc, genome_acc
+         .map { v -> tuple( v[3], v[0], v[1], v[2] ) }
+         .combine(
+            ClusterMoleculeEnds.out.loci,
+            by: 0,
+         )  // genome_acc, id, counts, qc, loci, bed
+         .map { v -> tuple(v[1], v[2], v[3], v[4]) }
+         | BuildEnd5AnnData
 
     }
 
 
    if ( params.mod_sites ) {
-       CountModSites(
+
+      CountModSites(
          DeduplicateMolecules.out  // id, bam, bai
             .combine(
                pre_site_ref   // genome_acc, sample_id, genome, gff
@@ -572,7 +594,10 @@ workflow {
          Channel.value( params.mapper ),
          Channel.value( params.min_mapq ),
          Channel.value( params.allow_multimap ),
-       )
+      )
+         | BuildModAnnData
+
+
    }
    SAMtools_stats.out | plot_bamstats
 
@@ -638,6 +663,20 @@ workflow {
 
    build_AnnData.out.main | filter_AnnData
    filter_AnnData.out.main | cluster_cells
+
+
+   // Collect available modalities by sample.
+   build_AnnData.out.main
+      .combine( 
+         ( params.end5_enabled ? BuildEnd5AnnData.out : build_AnnData.out.main.map { it[0] }.unique() ),
+         by: 0,
+      )
+      .combine(
+         ( params.mod_sites ? BuildModAnnData.out : build_AnnData.out.main.map { it[0] }.unique() ), 
+         by: 0,
+      )
+      .map { v -> tuple( v[0], v[1], v[2..-1] ) }
+      | BuildMuData
 
    trim_logs
       .map { it[1] }
