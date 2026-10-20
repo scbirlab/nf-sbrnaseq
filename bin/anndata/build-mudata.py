@@ -24,7 +24,7 @@ def qualify(obj, sample_id):
     return obj
 
 
-def reindex_sparse(obj, names):
+def reindex_sparse(obj, names, sample_id):
     """Expand rows without densifying X or its layers."""
     obj = obj.copy()
     old = obj.obs_names.get_indexer(names)
@@ -65,9 +65,63 @@ def reindex_sparse(obj, names):
         for key, value in obj.layers.items()
     }
 
+    
     import pandas as pd
+
     obs = obj.obs.reindex(names).copy()
+
+    # Restore identifiers for all cells, including cells
+    # structurally absent from this modality.
+    sample_id = str(sample_id)
+    obs["sample_id"] = sample_id
+    obs["cell_barcode"] = [
+        name[len(sample_id) + 1:]
+        for name in names
+    ]
+
+    # Preserve missing modality measurements as NaN,
+    # but normalise dtypes for HDF5 serialisation.
+    for column in obs.columns:
+        if column in ("sample_id", "cell_barcode"):
+            continue
+
+        series = obs[column]
+
+        if pd.api.types.is_categorical_dtype(series):
+            continue
+
+        if pd.api.types.is_numeric_dtype(series):
+            obs[column] = pd.to_numeric(
+                series, errors="raise"
+            )
+            continue
+
+        # Object columns may contain strings, numeric
+        # values and NaNs after union reindexing.
+        nonmissing = series.dropna()
+
+        if len(nonmissing) == 0:
+            obs[column] = pd.Series(
+                float("nan"), index=obs.index
+            )
+        elif nonmissing.map(
+            lambda x: isinstance(
+                x, (int, float, np.integer, np.floating)
+            )
+        ).all():
+            obs[column] = pd.to_numeric(
+                series, errors="raise"
+            )
+        else:
+            obs[column] = (
+                series.astype("string")
+                .fillna("")
+                .astype(str)
+            )
+
     obs["present_in_modality"] = present
+
+
 
     output = ad.AnnData(
         X=X,
@@ -106,7 +160,7 @@ def main():
     )))
 
     objects = {
-        key: reindex_sparse(obj, names)
+        key: reindex_sparse(obj, names, args.sample_id)
         for key, obj in objects.items()
     }
 

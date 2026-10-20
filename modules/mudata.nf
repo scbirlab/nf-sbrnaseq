@@ -80,11 +80,11 @@ process BuildMuData {
     """
     set -euox pipefail
 
-    test -f build.h5ad
+    test -f "${rna}"
 
     python ${projectDir}/bin/anndata/build-mudata.py \\
         --rna "${rna}" \\
-        --mod modalities/*.h5ad \\
+        --modalities modalities/*.h5ad \\
         --sample-id "${id}" \\
         --output sample.h5mu
     """

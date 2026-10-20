@@ -84,6 +84,19 @@ def main():
         dtype=np.int64,
     ).tocsr()
 
+
+    for column in (
+        "total_ends_count",
+        "assigned_ends_count",
+        "unassigned_ends_count",
+        "assigned_ends_fraction",
+    ):
+        if column in obs:
+            obs[column] = pd.to_numeric(
+                obs[column], 
+                errors="raise",
+            )
+
     obs = qc.set_index("cell_barcode").reindex(cells)
     obs["sample_id"] = args.sample_id
 
@@ -98,7 +111,7 @@ def main():
     if int(adata.X.sum()) != int(values.sum()):
         raise ValueError("Count conservation failed")
 
-    adata.uns["__modality__"] = args.modality or "5'-end"
+    adata.uns["__modality__"] = args.modality or "end5"
     adata.write_h5ad(args.output, compression="gzip")
 
     print(adata)

@@ -59,8 +59,7 @@ def main():
         raise ValueError("Base-count conservation failed")
 
     if not (
-        (df["callable_depth"] == df["ref_count"]) + df["alt_count"]
-        + df["other_count"]
+        df["callable_depth"] == (df["ref_count"] + df["alt_count"] + df["other_count"])
     ).all():
         raise ValueError("REF/ALT count conservation failed")
 
@@ -138,7 +137,7 @@ def main():
     assert int(adata.X.sum()) == int(df.alt_count.sum())
     assert int(adata.layers["callable_depth"].sum()) == int(df.callable_depth.sum())
 
-    adata.uns["__modality__"] = args.modality or "RNA modification"
+    adata.uns["__modality__"] = args.modality or "mod"
     adata.write_h5ad(args.output, compression="gzip")
     print(adata)
 

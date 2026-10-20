@@ -126,8 +126,8 @@ process UMIcollapse {
    tag "${id}:${bamfile}" 
 
    label 'big_mem'
-   // errorStrategy 'retry'
-   // maxRetries 2
+   errorStrategy { task.exitStatus == 255 ? 'retry' : 'terminate' }
+   maxRetries 2
 
    publishDir( 
       "${params.outputs}/umicollapse/logs", 
