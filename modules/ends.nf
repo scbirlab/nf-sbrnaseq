@@ -143,3 +143,36 @@ process AnnotateEndLoci {
     
     """
 }
+
+
+
+process AssignEndLoci {
+
+    tag "${id}"
+    label 'some_mem'
+
+    publishDir(
+        "${params.outputs}/ends",
+        mode: 'copy',
+        saveAs: { "${id}.${it}" },
+    )
+
+    input:
+    tuple val( id ), path( ends, stageAs: 'ends-??????/*' ), path( loci )
+
+    output:
+    tuple val( id ), path( "counts.tsv" ), emit: counts
+    tuple val( id ), path( "assignment-qc.tsv" ), emit: qc
+
+    script:
+    """
+    set -euox pipefail
+
+    python ${projectDir}/bin/assign-end-loci.py \\
+        --loci "${loci}" \\
+        --ends ends-*/*.gz \\
+        --counts counts.tsv \\
+        --qc assignment-qc.tsv
+    """
+}
+

@@ -39,6 +39,7 @@ include {
     ExtractMoleculeEnds;
     ClusterMoleculeEnds;
     AnnotateEndLoci;
+    AssignEndLoci;
 } from './modules/ends.nf'
 include { featurecounts } from './modules/featurecounts.nf'
 include { multiQC } from './modules/multiqc.nf'
@@ -524,7 +525,8 @@ workflow {
                .map { v -> v[1..0] },
             by: 0,
          )  // id, ends, genome_acc
-         .map { v -> tuple( v[-1], v[1] ) }  // genome_acc, ends, 
+         .tap { id_ends_genome_ch }
+         .map { v -> tuple( v[-1], v[1] ) }  // genome_acc, ends
          .groupTuple( by: 0 )  // genome_acc, [ends, ...]
          .set { all_ends }
 
@@ -532,13 +534,20 @@ workflow {
          all_ends,
          Channel.value( params.end5_min_support ),
          Channel.value( params.end5_max_width ),
-       )
+       )  // genome_acc, ends
 
-      AnnotateEndLoci(
-         ClusterMoleculeEnds.out.loci
-            .combine( gff_ch, by: 0 ),
-      )
+      ClusterMoleculeEnds.out.loci
+         .combine( gff_ch, by: 0 )
+         | AnnotateEndLoci  // genome_acc, ends
 
+      id_ends_genome_ch
+         .map { v -> tuple( v[-1], v[0], v[1] ) }  // genome_acc, id, ends
+         .combine(
+            AnnotateEndLoci.out,
+            by: 0,
+         )  // genome_acc, id, ends, loci
+         .map { v -> v[1..3] }
+         | AssignEndLoci
 
     }
 
