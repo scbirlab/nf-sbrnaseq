@@ -184,6 +184,8 @@ process PlotModSites {
     export MPLBACKEND=Agg
     export MPLCONFIGDIR="mpl"
     export NUMBA_CACHE_DIR="numba"
+    export XDG_CACHE_HOME="\$PWD/.cache"
+    mkdir -p "\$XDG_CACHE_HOME/fontconfig"
     mkdir "\$MPLCONFIGDIR" "\$NUMBA_CACHE_DIR"
 
     python ${projectDir}/bin/anndata/plot-mod-sites.py \\

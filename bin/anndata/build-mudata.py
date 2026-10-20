@@ -223,16 +223,14 @@ def main():
     mdata.obs["rna_qc_pass"] = [
         name in qc_names for name in names
     ]
-    mdata.uns["__modalities__"] = ("rna",)
 
     for key, _mdata in objects.items():
         mdata.obs[f"has_{key}"] = (
             _mdata.obs["present_in_modality"]
             .to_numpy(dtype=bool)
         )
-        mdata.uns["__modalities__"] += (key,)
 
-    mdata.uns["__modalities__"] = np.asarray(mdata.uns["__modalities__"])
+    mdata.uns["__modalities__"] = np.asarray(list(objects), dtype=str)
     if (mdata.obs["rna_qc_pass"] > mdata.obs["has_rna"]).any():
         raise ValueError("Invalid RNA-QC membership")
 
