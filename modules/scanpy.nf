@@ -73,7 +73,7 @@ process cluster_cells {
    tag "${id}"
    label "med_mem"
 
-   errorStrategy 'ignore'
+   // errorStrategy 'ignore'
 
    publishDir( 
       "${params.outputs}/clustering", 
@@ -85,7 +85,8 @@ process cluster_cells {
    tuple val( id ), path( anndata )
 
    output:
-   tuple val( id ), path( "*.{png,csv}" ), emit: main
+   tuple val( id ), path( "*.{png,csv}" ), emit: main, optional: true
+   tuple val( id ), path( "cluster.h5ad" ), emit: anndata
    path "*.log", emit: logs
 
    script:
@@ -96,9 +97,15 @@ process cluster_cells {
    export NUMBA_CACHE_DIR="numba"
    mkdir "\$MPLCONFIGDIR" "\$NUMBA_CACHE_DIR"
 
-   python ${projectDir}/bin/anndata-utils.py cluster "${anndata}" -o cluster 2> >(tee cluster.log)
+   python ${projectDir}/bin/anndata-utils.py cluster \\
+      "${anndata}" \\
+      -o cluster \\
+   2> >(tee cluster.log)
 
-   mv figures/*.png .
+   if [ -f figures/*.png ]
+   then
+      mv figures/*.png .
+   fi
    
    """
 }

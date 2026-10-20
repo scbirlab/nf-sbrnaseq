@@ -396,44 +396,73 @@ def _cluster(args: Namespace) -> None:
         print_err(f"Found {adata.var['highly_variable_non_rRNA'].sum()} highly variable genes!")
         use_highly_variable = adata.var['highly_variable_non_rRNA'].sum() >= 3
 
+    
     print_err("Applying PCA...")
-    try:
-        sc.pp.pca(
-            adata, 
-            mask_var="highly_variable_non_rRNA" if use_highly_variable else "not_is_rRNA",
+
+    mask = (
+        "highly_variable_non_rRNA"
+        if use_highly_variable else "not_is_rRNA"
+    )
+
+    if int(adata.var[mask].sum()) < 3:
+        raise ValueError(
+            "Fewer than three non-rRNA genes available for PCA"
         )
-    except ValueError as e:
-        print_err(e)
+
+    n_comps = min(50, adata.n_obs - 1, int(adata.var[mask].sum()) - 1)
+
+    if n_comps < 2:
+        raise ValueError("Insufficient dimensions for PCA")
+
+    sc.pp.pca(
+        adata,
+        n_comps=n_comps,
+        mask_var=mask,
+        random_state=0,
+    )
+
     print_err("Getting nearest neighbours...")
     sc.pp.neighbors(
-        adata, 
-        metric='euclidean',
+        adata,
+        n_neighbors=min(15, adata.n_obs - 1),
+        metric="euclidean",
+        use_rep="X_pca",
+        random_state=0,
     )
-    print_err("Carrying out Leiden clustering on cells...")
+
+    print_err("Carrying out Leiden clustering...")
     sc.tl.leiden(
-        adata, 
-        key_added="leiden", 
-        resolution=1.,
-        flavor='igraph',
+        adata,
+        key_added="leiden",
+        resolution=1.0,
+        flavor="igraph",
         directed=False,
+        random_state=0,
     )
-    print_err(f"Found {adata.obs['leiden'].cat.categories.size} Leiden clusters of cells!")
-    print_err("Finding gene markers per cell cluster...")
-    sc.tl.rank_genes_groups(
-        adata, 
-        "leiden",
-        mask_var="highly_variable_non_rRNA" if use_highly_variable else "not_is_rRNA",
-        method="t-test",
-        rankby_abs=True,
-        use_raw=False,
+
+    print_err(
+        f"Found {adata.obs['leiden'].cat.categories.size} clusters"
     )
+
+    if adata.obs["leiden"].nunique() > 1:
+        sc.tl.rank_genes_groups(
+            adata,
+            "leiden",
+            mask_var=mask,
+            method="t-test",
+            rankby_abs=True,
+            use_raw=False,
+        )
+
     print_err("Embedding as UMAP...")
     sc.tl.umap(
-        adata, 
-        min_dist=.1,  # umap-learn default = .1
-        spread=1.,
+        adata,
+        min_dist=0.1,
+        spread=1.0,
+        random_state=0,
     )
-    save_anndata(adata, f"{args.output}.clustered", printf=print_err)
+
+    save_anndata(adata, f"{args.output}", printf=print_err)
 
     n_genes, n_cells = adata.n_vars, adata.n_obs
     biotype_flags = [c for c in adata.obs if c.startswith("is_")]
@@ -504,7 +533,7 @@ def _cluster(args: Namespace) -> None:
     print_err("Plotting heatmap of mean gene markers per cell cluster...")
     # Compute a dendrogram on a dense representation only (avoids pandas+csr bug)
     try:
-        if "X_pca" in adata.obsm_keys():
+        if "X_pca" in adata.obsm:
             sc.tl.dendrogram(adata, groupby="leiden", use_rep="X_pca", key_added="dendrogram_leiden")
             dendro_arg = "dendrogram_leiden"
         else:
@@ -518,19 +547,21 @@ def _cluster(args: Namespace) -> None:
     except Exception as e:
         print(f"[warn] dendrogram computation failed: {e}. Proceeding without dendrogram.")
         dendro_arg = False
-    sc.pl.rank_genes_groups_matrixplot(
-        adata,
-        n_genes=min(10, adata.n_vars),
-        groupby="leiden",
-        dendrogram=dendro_arg,
-        save=f"{args.output}.cluster-gene-markers-mean.{args.plot_format}",
-    )
-    print_err("Plotting heatmap of gene markers per cell cluster...")
-    sc.pl.rank_genes_groups_heatmap(
-        adata, 
-        show_gene_labels=True, 
-        save=f"{args.output}.cluster-gene-markers.{args.plot_format}",
-    )
+
+    if adata.obs["leiden"].nunique() > 1:
+        sc.pl.rank_genes_groups_matrixplot(
+            adata,
+            n_genes=min(10, adata.n_vars),
+            groupby="leiden",
+            dendrogram=dendro_arg,
+            save=f"{args.output}.cluster-gene-markers-mean.{args.plot_format}",
+        )
+        print_err("Plotting heatmap of gene markers per cell cluster...")
+        sc.pl.rank_genes_groups_heatmap(
+            adata, 
+            show_gene_labels=True, 
+            save=f"{args.output}.cluster-gene-markers.{args.plot_format}",
+        )
 
     return None
 

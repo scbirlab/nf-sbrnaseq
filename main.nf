@@ -53,6 +53,7 @@ include {
     BuildModAnnData;
     BuildMuData;
     QCMuData;
+    PlotRNAUMAPs;
 } from './modules/mudata.nf'
 include { 
    fetch_genome_from_NCBI; 
@@ -684,6 +685,9 @@ workflow {
       | BuildMuData
       | QCMuData
 
+   cluster_cells.out.anndata
+      .join( BuildMuData.out, by: 0 )
+      | PlotRNAUMAPs
 
    trim_logs
       .map { it[1] }

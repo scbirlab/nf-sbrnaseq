@@ -122,3 +122,39 @@ process QCMuData {
         --output qc
     """
 }
+
+
+
+process PlotRNAUMAPs {
+    tag "${id}"
+    label "some_mem"
+
+    publishDir(
+        "${params.outputs}/visualisation",
+        mode: 'copy',
+        saveAs: { "${id}.${it}" },
+    )
+
+    input:
+    tuple val( id ), path( clustered ), path( h5mu )
+
+    output:
+    tuple val( id ), path( "umap.*.png" ), emit: figures
+    tuple val( id ), path( "umap.*.csv" ), emit: tables
+
+    script:
+    """
+    set -euox pipefail
+
+    export MPLCONFIGDIR="mpl"
+    export NUMBA_CACHE_DIR="numba"
+    mkdir "\$MPLCONFIGDIR" "\$NUMBA_CACHE_DIR"
+
+    python ${projectDir}/bin/anndata/plot-umaps.py \\
+        --clustered "${clustered}" \\
+        --mudata "${h5mu}" \\
+        --output umap
+    
+    """
+}
+

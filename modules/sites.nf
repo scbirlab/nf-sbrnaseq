@@ -4,8 +4,9 @@ process ResolveSites {
     tag "${id}"
 
     publishDir(
-        "${params.outputs}/sites",
+        "${params.outputs}/modifications",
         mode: 'copy',
+        saveAs: { "${id}.${it}" }
     )
 
     input:
