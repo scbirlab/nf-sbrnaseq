@@ -10,89 +10,18 @@
 */
 
 nextflow.enable.dsl=2
-pipeline_title = """\
-   S C B I R   s b R N A - S E Q   P I P E L I N E
-   ===============================================
 
-   Nextflow pipeline to process demultiplexed Illumina paired-end 
-   FASTQ files from multiple bacterial samples into a gene x
-   cell count table.
-   """
-   .stripIndent()
+def pipeline_title() {
+    return """\
+      S C B I R   s b R N A - S E Q   P I P E L I N E
+      ===============================================
 
-/*
-========================================================================================
-   Help text
-========================================================================================
-*/
-if ( params.help ) {
-   println pipeline_title + """\
-         Usage:
-            nextflow run sbcirlab/nf-sbrnaseq --sample_sheet <csv> [--fastq-dir <dir>|--from-sra]
-            nextflow run sbcirlab/nf-sbrnaseq -c <config-file>
-
-         Required parameters:
-            sample_sheet               Path to a CSV containing sample IDs matched with FASTQ filenames, genome information, and adapter sequences.
-
-         If using local FASTQ data (the default behavior):
-            fastq_dir                  Path to directory containing the FASTQ file.
-          
-         Optional parameters (with defaults):  
-            from_sra = false           Whether to fetch FASTQ data from the SRA.
-            allow_cell_errors = true   Whether to allow 1 error when matching cell barcodes in the whitelist.
-            trim_qual = 5              For `cutadapt`, the minimum Phred score for trimming 3' calls
-            min_length = "9:38"        For `cutadapt`, the minimum trimmed length of a read. Shorter reads will be discarded
-            strand = 1                 For `featureCounts`, the strandedness of RNA-seq. `1` for forward, `2` for reverse.
-            ann_type = 'gene'          For `featureCounts`, features from GFF column 3 to use for counting
-            label = 'Name'             For `featureCounts`, one or more (comma-separated) fields from column 9 of GFF for labeling counts
-
-         The parameters can be provided either in the `nextflow.config` file or on the `nextflow run` command.
-   
-   """.stripIndent()
-   System.exit(0)
+      Nextflow pipeline to process demultiplexed Illumina paired-end 
+      FASTQ files from multiple bacterial samples into a gene x
+      cell count table.
+      """
+      .stripIndent()
 }
-
-/*
-========================================================================================
-   Check parameters
-========================================================================================
-*/
-if ( !params.sample_sheet ) {
-   throw new Exception("!!! PARAMETER MISSING: Please provide a path to sample_sheet")
-}
-if ( !params.from_sra ) {
-   if ( !params.fastq_dir ) {
-      throw new Exception("!!! PARAMETER MISSING: Please provide a path to fastq_dir")
-   }
-}
-
-log.info pipeline_title + """\
-   Nanopore mode     : ${params.nanopore}
-   inputs
-      input dir.     : ${params.inputs}
-      FASTQ dir.     : ${params.fastq_dir}
-      sample sheet   : ${params.sample_sheet}
-   trimming 
-      quality        : ${params.trim_qual}
-      minimum length : ${params.min_length}
-   UMI-tools
-      allow errors   : ${params.allow_cell_errors}
-   Aligner           : ${params.mapper}
-   FeatureCounts
-      Strand         : ${params.strand}
-      Annotation     : ${params.ann_type}
-      Label          : ${params.label}
-   UMIcollapse
-      Source         : ${params.umicollapse_repo}
-   output            : ${params.outputs}
-   """
-   .stripIndent()
-
-/*
-========================================================================================
-   MAIN Workflow
-========================================================================================
-*/
 
 include { 
    bowtie2_index; 
@@ -106,12 +35,24 @@ include {
    bam2wig;
    plot_peaks;
 } from './modules/deeptools.nf'
+include {
+    ExtractMoleculeEnds;
+    ClusterMoleculeEnds;
+    AnnotateEndLoci;
+    AssignEndLoci;
+} from './modules/ends.nf'
 include { featurecounts } from './modules/featurecounts.nf'
 include { multiQC } from './modules/multiqc.nf'
 include { 
    minimap_index; 
    minimap_align;
 } from './modules/minimap.nf'
+include { CountModSites } from './modules/modifications.nf'
+include {
+    BuildEnd5AnnData;
+    BuildModAnnData;
+    BuildMuData;
+} from './modules/mudata.nf'
 include { 
    fetch_genome_from_NCBI; 
    prefetch_from_SRA;
@@ -127,6 +68,7 @@ include {
    gene_body_coverage;  
    gff2bed; 
 } from './modules/rseqc.nf'
+include { ResolveSites } from './modules/sites.nf'
 include { 
    STAR_index; 
    STAR_align;
@@ -137,7 +79,11 @@ include {
 } from './modules/trimming.nf'
 include { 
    fetch_UMIcollapse; 
+   Prepend_Barcode;
+   Shard_for_UMIcollapse;
    UMIcollapse;
+   Concat_UMIcollapse;
+   DeduplicateMolecules;
 } from './modules/umicollapse.nf'
 include { 
    UMItools_count;
@@ -173,6 +119,74 @@ include {
 } from './modules/whitelisting.nf'
 
 workflow {
+   main:
+   /*
+   ========================================================================================
+      Help text
+   ========================================================================================
+   */
+   if ( params.help ) {
+      println pipeline_title() + """\
+            Usage:
+               nextflow run sbcirlab/nf-sbrnaseq --sample_sheet <csv> [--fastq-dir <dir>|--from-sra]
+               nextflow run sbcirlab/nf-sbrnaseq -c <config-file>
+
+            Required parameters:
+               sample_sheet               Path to a CSV containing sample IDs matched with FASTQ filenames, genome information, and adapter sequences.
+
+            If using local FASTQ data (the default behavior):
+               fastq_dir                  Path to directory containing the FASTQ file.
+            
+            Optional parameters (with defaults):  
+               from_sra = false           Whether to fetch FASTQ data from the SRA.
+               allow_cell_errors = true   Whether to allow 1 error when matching cell barcodes in the whitelist.
+               trim_qual = 5              For `cutadapt`, the minimum Phred score for trimming 3' calls
+               min_length = "9:38"        For `cutadapt`, the minimum trimmed length of a read. Shorter reads will be discarded
+               strand = 1                 For `featureCounts`, the strandedness of RNA-seq. `1` for forward, `2` for reverse.
+               ann_type = 'gene'          For `featureCounts`, features from GFF column 3 to use for counting
+               label = 'Name'             For `featureCounts`, one or more (comma-separated) fields from column 9 of GFF for labeling counts
+
+            The parameters can be provided either in the `nextflow.config` file or on the `nextflow run` command.
+      
+      """.stripIndent()
+      System.exit(0)
+   }
+
+   /*
+   ========================================================================================
+      Check parameters
+   ========================================================================================
+   */
+   if ( !params.sample_sheet ) {
+      throw new Exception("!!! PARAMETER MISSING: Please provide a path to sample_sheet")
+   }
+   if ( !params.from_sra ) {
+      if ( !params.fastq_dir ) {
+         throw new Exception("!!! PARAMETER MISSING: Please provide a path to fastq_dir")
+      }
+   }
+
+   log.info pipeline_title() + """\
+      Nanopore mode     : ${params.nanopore}
+      inputs
+         input dir.     : ${params.inputs}
+         FASTQ dir.     : ${params.fastq_dir}
+         sample sheet   : ${params.sample_sheet}
+      trimming 
+         quality        : ${params.trim_qual}
+         minimum length : ${params.min_length}
+      UMI-tools
+         allow errors   : ${params.allow_cell_errors}
+      Aligner           : ${params.mapper}
+      FeatureCounts
+         Strand         : ${params.strand}
+         Annotation     : ${params.ann_type}
+         Label          : ${params.label}
+      UMIcollapse
+         Source         : ${params.umicollapse_repo}
+      output            : ${params.outputs}
+      """
+      .stripIndent()
 
    /*
    ========================================================================================
@@ -273,6 +287,7 @@ workflow {
       .map { tuple( it.sample_id, it.genome_accession ) }
       .set { genome_ch }  // sample_id, genome_acc
 
+
    /*
    ========================================================================================
       Processing
@@ -282,16 +297,31 @@ workflow {
    Channel.of( params.umicollapse_repo ) | fetch_UMIcollapse
    reads_ch | fastQC 
    genome_ch
-      .map { it[1] }  // genome_acc
+      .map { v -> v[1] }  // genome_acc
       .unique()
       | fetch_genome_from_NCBI   // genome_acc, genome, gff
 
    genome_ch
-      .map { it[1..0] }  // genome_acc, sample_id
+      .map { v -> v[1..0] }  // genome_acc, sample_id
       .combine( fetch_genome_from_NCBI.out, by: 0 )  // genome_acc, sample_id, genome, gff
-      .map { tuple( it[1], it[-1] ) }  // sample_id, gff
+      .tap { pre_site_ref }
+      .map { v -> tuple( v[1], v[-1] ) }  // sample_id, gff
       .unique()
       .set { genome_gff }
+
+   if ( params.mod_sites ) {
+
+      pre_site_ref
+         .map { v -> tuple( v[0], v[2], v[3] ) }  // genome_acc, genome, gff
+         .unique()
+         .set { site_references }
+
+      ResolveSites(
+         site_references,
+         Channel.value( file( params.mod_sites, checkIfExists: true ) ),
+         Channel.value( params.sites_join_on ),
+      )
+   }
 
    if ( !params.nanopore ) {
 
@@ -414,6 +444,7 @@ workflow {
 
       STAR_align(
          pre_mapper,
+         Channel.value( params.max_multimaps ),
          Channel.value( params.strand ),
       )
          | set { mapped_reads }
@@ -422,8 +453,10 @@ workflow {
 
    else if ( params.mapper == "bowtie2" ) {
 
-      pre_mapper
-         | bowtie2_align
+      bowtie2_align(
+         pre_mapper,
+         Channel.value( params.max_multimaps ),
+      )
          | set { mapped_reads }
 
    } 
@@ -432,29 +465,143 @@ workflow {
 
       minimap_align(
          pre_mapper,
+         Channel.value( params.max_multimaps ),
          Channel.value( params.nanopore ),
 
       )
          | set { mapped_reads }
 
    }
+   remove_multimappers(
+      mapped_reads.main,
+      Channel.value( params.mapper ),
+      Channel.value( params.min_mapq ),
+      Channel.value( !params.allow_multimap ),
+   )
+   Prepend_Barcode(
+      remove_multimappers.out,
+      Channel.value( !params.unpaired ),
+      Channel.value( params.nanopore ),
+
+   )
+      | Shard_for_UMIcollapse
 
    UMIcollapse(
-      mapped_reads.main
-         | remove_multimappers
-         | combine( fetch_UMIcollapse.out ),
-      Channel.value( !params.unpaired ),
+      Shard_for_UMIcollapse.out
+      .transpose()
+      .combine( fetch_UMIcollapse.out ),
+      Channel.value( !params.unpaired && !params.nanopore ),
+      Channel.value( params.nanopore ),
    )
 
-   UMIcollapse.out.main
+   Prepend_Barcode.out
+      // .view()
+      .combine( UMIcollapse.out.main, by: 0 )
+      .groupTuple( by: [0, 1] )
+      //.view()
+      | Concat_UMIcollapse
       | (
          SAMtools_stats
          & SAMtools_coverage
          & SAMtools_flagstat
+         & DeduplicateMolecules
       )
+
+   fetch_genome_from_NCBI.out
+      .map { v -> tuple( v[0], v[2] ) }
+      .unique()
+      .tap { gff_ch }
+      | gff2bed
+   
+    if ( params.end5_enabled ) {
+
+      ExtractMoleculeEnds(
+         DeduplicateMolecules.out,
+         Channel.value( params.end5_read ),
+         Channel.value( params.end5_boundary ),
+         Channel.value( params.strand ),
+         Channel.value( params.min_mapq ),
+         Channel.value( !params.end5_include_softclip ),
+      ) // id, ends
+
+      ExtractMoleculeEnds.out
+         .combine(
+            pre_site_ref   // genome_acc, sample_id, genome, gff
+               .map { v -> v[1..0] },
+            by: 0,
+         )  // id, ends, genome_acc
+         .tap { id_ends_genome_ch }
+         .map { v -> tuple( v[-1], v[1] ) }  // genome_acc, ends
+         .groupTuple( by: 0 )  // genome_acc, [ends, ...]
+         .set { all_ends }
+
+      ClusterMoleculeEnds(
+         all_ends,
+         Channel.value( params.end5_min_support ),
+         Channel.value( params.end5_max_width ),
+       )  // genome_acc, ends
+
+      ClusterMoleculeEnds.out.loci
+         .combine( gff_ch, by: 0 )
+         | AnnotateEndLoci  // genome_acc, ends
+
+      id_ends_genome_ch
+         .map { v -> tuple( v[-1], v[0], v[1] ) }  // genome_acc, id, ends
+         .combine(
+            ClusterMoleculeEnds.out.loci,
+            by: 0,
+         )  // genome_acc, id, ends, loci
+         .map { v -> v[1..3] }
+         | AssignEndLoci  // id, ends
+
+      AssignEndLoci.out.counts
+         .combine( AssignEndLoci.out.qc, by: 0 )
+         .combine(
+            id_ends_genome_ch
+               .map { v -> tuple( v[0], v[2] ) }
+               .unique(),
+            by: 0,
+         )  // id, counts, qc, genome_acc
+         .map { v -> tuple( v[3], v[0], v[1], v[2] ) }
+         .combine(
+            ClusterMoleculeEnds.out.loci,
+            by: 0,
+         )  // genome_acc, id, counts, qc, loci, bed
+         .map { v -> tuple(v[1], v[2], v[3], v[4]) }
+         | BuildEnd5AnnData
+
+    }
+
+
+   if ( params.mod_sites ) {
+
+      CountModSites(
+         DeduplicateMolecules.out  // id, bam, bai
+            .combine(
+               pre_site_ref   // genome_acc, sample_id, genome, gff
+                  .map { v -> v[1..0] },
+               by: 0,
+            )  // id, bam, bai, genome_acc
+            .map { v -> tuple( v[-1], v[0], v[1], v[2] ) } // genome_acc, id, bam, bai, 
+            .combine( 
+               ResolveSites.out, // genome_acc, sites
+               by: 0,
+            )  // genome_acc, id, bam, bai, sites
+            .map { v -> v[1..-1] }
+            .combine( mapped_reads.main, by: 0 ),  // id, bam, bai, sites, mapped_bam, mapped_bai
+         Channel.value( params.mod_min_mapq ),
+         Channel.value( params.mod_min_baseq ),
+         Channel.value( params.mapper ),
+         Channel.value( params.min_mapq ),
+         Channel.value( params.allow_multimap ),
+      )
+         | BuildModAnnData
+
+
+   }
    SAMtools_stats.out | plot_bamstats
 
-   UMIcollapse.out.main
+   Concat_UMIcollapse.out.main
       .combine( genome_gff, by: 0 )  // sample_id, dedup_bam, gff
       .unique()
       .set { collapsed }
@@ -467,11 +614,6 @@ workflow {
       Channel.value( params.label ),
       Channel.value( params.unpaired ),
    )
-
-   collapsed
-      .map { tuple( it[0], it[2] ) }
-      .unique()
-      | gff2bed
 
    collapsed
       .map { tuple( it[0], it[1] ) }
@@ -522,6 +664,20 @@ workflow {
    build_AnnData.out.main | filter_AnnData
    filter_AnnData.out.main | cluster_cells
 
+
+   // Collect available modalities by sample.
+   build_AnnData.out.main
+      .combine( 
+         ( params.end5_enabled ? BuildEnd5AnnData.out : build_AnnData.out.main.map { it[0] }.unique() ),
+         by: 0,
+      )
+      .combine(
+         ( params.mod_sites ? BuildModAnnData.out : build_AnnData.out.main.map { it[0] }.unique() ), 
+         by: 0,
+      )
+      .map { v -> tuple( v[0], v[1], v[2..-1] ) }
+      | BuildMuData
+
    trim_logs
       .map { it[1] }
       .concat(
@@ -537,17 +693,10 @@ workflow {
       .unique()
       .collect()
       | multiQC
-
+   
 }
 
-/*
-========================================================================================
-   Workflow Event Handler
-========================================================================================
-*/
-
 workflow.onComplete {
-
    println ( workflow.success ? """
       Pipeline execution summary
       ---------------------------

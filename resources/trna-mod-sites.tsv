@@ -1,0 +1,14 @@
+feature	position	ref_base	alt_base	modification
+tRNA	9	A	G	m1A_9
+tRNA	9	G	C	m1G_9C
+tRNA	9	G	A	m1G_9A
+tRNA	9	G	T	m1G_9T
+tRNA	34	A	G	inosine_34
+tRNA	37	G	C	m1G_37C
+tRNA	37	G	A	m1G_37A
+tRNA	37	G	T	m1G_37T
+tRNA	32	C	T	m3C_32C
+tRNA	32	C	A	m3C_32A
+tRNA	32	C	G	m3C_32T
+tRNA	58	A	G	m1A_58
+tRNA	59	A	G	m1A_59

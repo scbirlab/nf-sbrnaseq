@@ -19,7 +19,8 @@ process STAR_index {
       --runThreadN ${task.cpus} \
       --genomeDir star-index \
       --genomeFastaFiles ${fasta} \
-      --sjdbOverhang 100 \
+      --genomeSAindexNbases 10 \
+      --sjdbOverhang 99 \
       --sjdbGTFfile ${gff} \
       --sjdbGTFfeatureExon CDS \
       --sjdbGTFtagExonParentTranscript Parent \
@@ -36,69 +37,62 @@ process STAR_index {
 process STAR_align {
 
    tag "${id}:${genome_acc}" 
-   label "big_cpu"
+   label "big_mem"
    time "2d"
 
    // errorStrategy 'retry'
    // maxRetries 1
 
+
    publishDir( 
-      "${params.outputs}/mapped", 
-      mode: 'copy',
-      // saveAs: { "${id}.star.bam" },
-      pattern: "*.bam"
-   )
-   publishDir( 
-      "${params.outputs}/mapped", 
+      "${params.outputs}/mapped/star", 
       mode: 'copy',
       // saveAs: { "${id}.${it}" },
-      pattern: "*.{bg,tab}"
-   )
-   publishDir( 
-      "${params.outputs}/mapped", 
-      mode: 'copy',
-      // saveAs: { "${id}.star.log" },
-      pattern: "Log.final.out"
+      pattern: "*.{bam,bg,tab,.star.log}"
    )
 
    input:
    tuple val( id ), path( reads ), path( idx ), val( genome_acc )
+   val max_multimaps
    val strand
 
    output:
    tuple val( id ), path( "${id}.star.bam" ), emit: main
    tuple val( id ), path( "*.star.bg" ), emit: bg
    tuple val( id ), path( "*.star.tab" ), emit: tab
-   path "${id}.star.log", emit: logs
+   tuple val( id ), path( "*.star.log" ), emit: log2
+   path "Log.final.out", emit: logs
 
    script:
    """
-   STAR \
-      --runMode alignReads \
-      --runThreadN ${task.cpus} \
-      --genomeDir "${idx}" \
-      --readFilesIn ${reads} \
-      --readFilesCommand zcat \
-      --alignEndsType Local \
-      --alignIntronMax 1 \
-      --outFilterMultimapNmax 20 \
-      --outSAMprimaryFlag AllBestScore \
-      --outSAMattributes NH HI NM MD AS nM \
-      --outSAMattrIHstart 0 \
-      --twopassMode None \
-      --quantMode GeneCounts \
-      --outWigType bedGraph read1_5p \
-      --outSAMtype BAM SortedByCoordinate \
-      --outBAMsortingThreadN ${task.cpus} \
+   STAR \\
+      --runMode alignReads \\
+      --runThreadN ${task.cpus} \\
+      --genomeDir "${idx}" \\
+      --readFilesIn ${reads} \\
+      --readFilesCommand zcat \\
+      --alignEndsType Local \\
+      --alignIntronMax 1 \\
+      --outFilterMultimapNmax ${max_multimaps} \\
+      --outSAMmultNmax ${max_multimaps} \\
+      --outSAMprimaryFlag OneBestScore \\
+      --outSAMattributes NH HI NM MD AS nM \\
+      --outSAMattrIHstart 0 \\
+      --outFilterScoreMinOverLread 0.4 --outFilterMatchNminOverLread 0.4 --outFilterMatchNmin 16 \\
+      --twopassMode None \\
+      --quantMode GeneCounts \\
+      --outWigType bedGraph read1_5p \\
+      --outSAMtype BAM SortedByCoordinate \\
+      --outBAMsortingThreadN ${task.cpus} \\
       --limitBAMsortRAM ${Math.round(task.memory.getBytes() * 0.8)}
 
    mv "Aligned.sortedByCoord.out.bam" "${id}.star.bam"
-   mv "Log.final.out" "${id}.star.log"
+   cp "Log.final.out" "${id}.star.log"
    mv ReadsPerGene.out.tab "${id}.star.tab"
 
    for f in *.bg
    do
-      mv "\$f" "\$(basename \$f .bg)".star.bg
+      mv "\$f" "${id}"."\$(basename \$f .bg)".star.bg
    done
    
    """

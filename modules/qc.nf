@@ -14,13 +14,13 @@ process fastQC {
    script:
    """
    zcat ??/*.fastq.gz > "${id}.fastq"
-   fastqc --noextract --memory 10000 --threads ${task.cpus} "${id}.fastq"
+   fastqc --memory 10000 --threads ${task.cpus} "${id}.fastq"
    rm "${id}.fastq"
    """
    stub:
    """
    zcat ??/*.fastq.gz | head -n1000 > "${id}.fastq"
-   fastqc --noextract --memory 10000 --threads ${task.cpus} "${id}.fastq"
+   fastqc --memory 10000 --threads ${task.cpus} "${id}.fastq"
    rm "${id}.fastq"
    """
 

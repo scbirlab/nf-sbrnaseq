@@ -225,7 +225,7 @@ def _build(args: Namespace) -> None:
         grid_columns=[
             "n_cells_by_counts", 
             "total_counts", 
-            "length", 
+            "Length", 
             "pct_dropout_by_counts",
             "pseudobulk_read_count",
         ],
@@ -242,6 +242,8 @@ def _build(args: Namespace) -> None:
         name=f"{args.output}.gene-qc",
         df=adata.var,
     )
+
+    adata.layers["counts"] = adata.X.copy()
     sc.pp.log1p(adata)
 
     save_anndata(adata, f"{args.output}", printf=print_err)

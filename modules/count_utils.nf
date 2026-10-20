@@ -20,20 +20,36 @@ process join_featurecounts_UMItools {
    """
    #!/usr/bin/env python
 
+   from carabiner import print_err
    import pandas as pd
 
    featurecounts_df = (
-      pd.read_csv("${featurecounts_table}", sep="\\t", comment='#')
-      .rename(columns={"Chr": "chr"})
+      pd.read_csv(
+         "${featurecounts_table}", 
+         sep="\\t", 
+         comment="#",
+      )
+      .rename(columns={
+         "Chr": "chr", 
+         "Geneid": "gene_id",
+      })
       .assign(
          sample_id="${id}",
-         gene_id=lambda x: x["Geneid"],
       )
    )
 
-   bam_cols = [col for col in featurecounts_df if col.endswith(".bam")]
+   bam_cols = [
+      col for col in featurecounts_df 
+      if col.endswith(".bam")
+   ]
+   if len(bam_cols) > 0:
+      bam_cols = bam_cols[0]
+   else:
+      raise AttributeError(
+         f"No column ending in .bam in featurecounts table: {featurecounts_df.columns}"
+      )
    featurecounts_df = featurecounts_df.rename(
-      columns={col: "pseudobulk_read_count" for col in bam_cols}
+      columns={bam_cols: "pseudobulk_read_count"},
    )
 
    df_in = (
@@ -43,24 +59,40 @@ process join_featurecounts_UMItools {
       )
    )
 
-   df_out = (
-      featurecounts_df
-      .merge(
-         df_in,
-         how="outer",
-      )
-      .drop_duplicates()
-      .assign(
-         umi_count=lambda x: x["umi_count"].fillna(0).astype(int),
-         read_count=lambda x: x["read_count"].fillna(0).astype(int),
-      )
+   print_err(
+      f"Merging on {set(featurecounts_df.columns).intersection(set(df_in.columns))}"
+   )
+   
+   key = ["sample_id", "chr", "gene_id"]
+   cell_key = key + ["cell_barcode"]
+
+   if featurecounts_df.duplicated(key).any():
+      raise ValueError("Duplicate feature annotations")
+
+   if df_in.duplicated(cell_key).any():
+      raise ValueError("Duplicate cell-gene count rows")
+
+   df_out = df_in.merge(
+      featurecounts_df,
+      on=key,
+      how="left",
+      validate="many_to_one",
+      indicator=True,
    )
 
-   #if df_out.shape[0] != df_in.shape[0]:
-   #   raise ValueError(
-   #      f"Extra rows were added! {df_in.shape[0]=} -> {df_out.shape[0]=} "
-   #      f"(Featurecounts had {featurecounts_df.shape[0]} rows)."
-   #   )
+   if (df_out["_merge"] != "both").any():
+      missing = df_out.loc[df_out["_merge"] != "both", key]
+      raise ValueError(
+         f"Missing annotations for {len(missing)} count rows:\\n"
+         f"{missing.head(10)}"
+      )
+
+   if len(df_out) != len(df_in):
+      raise ValueError("Count-table join changed row cardinality")
+
+   df_out = df_out.drop(columns="_merge")
+   df_out["umi_count"] = df_out["umi_count"].astype(int)
+   df_out["read_count"] = df_out["read_count"].astype(int)
 
    df_out.to_csv("all-counts.tsv", sep="\\t", index=False)
 
