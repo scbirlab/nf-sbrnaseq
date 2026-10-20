@@ -56,6 +56,11 @@ def load_sites(filename):
             if site[field] not in BASES:
                 raise ValueError(f"Invalid {field}: {site}")
 
+        if site["ref_base"] == site["alt_base"]:
+            raise ValueError(
+                f"REF and ALT must differ: {site['site_id']}"
+            )
+
         convert = (
             lambda b: b if site["strand"] == "+"
             else streq.reverse_complement(b)
