@@ -664,19 +664,24 @@ workflow {
    build_AnnData.out.main | filter_AnnData
    filter_AnnData.out.main | cluster_cells
 
-
-   // Collect available modalities by sample.
+   // Collect available modalities and RNA-QC membership by sample.
    build_AnnData.out.main
-      .combine( 
-         ( params.end5_enabled ? BuildEnd5AnnData.out : build_AnnData.out.main.map { it[0] }.unique() ),
+      .join(filter_AnnData.out.main, by: 0)
+      .combine(
+         (params.end5_enabled
+            ? BuildEnd5AnnData.out
+            : build_AnnData.out.main.map { it[0] }.unique()),
          by: 0,
       )
       .combine(
-         ( params.mod_sites ? BuildModAnnData.out : build_AnnData.out.main.map { it[0] }.unique() ), 
+         (params.mod_sites
+            ? BuildModAnnData.out
+            : build_AnnData.out.main.map { it[0] }.unique()),
          by: 0,
       )
-      .map { v -> tuple( v[0], v[1], v[2..-1] ) }
+      .map { v -> tuple(v[0], v[1], v[2], v[3..-1]) }
       | BuildMuData
+
 
    trim_logs
       .map { it[1] }

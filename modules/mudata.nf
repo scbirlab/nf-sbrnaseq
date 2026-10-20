@@ -71,7 +71,7 @@ process BuildMuData {
     )
 
     input:
-    tuple val( id ), path( rna ), path( h5ads, stageAs: "modalities/*" )
+    tuple val( id ), path( rna ), path( rna_qc ), path( h5ads, stageAs: "modalities/*" )
 
     output:
     tuple val( id ), path( "sample.h5mu" )
@@ -80,10 +80,9 @@ process BuildMuData {
     """
     set -euox pipefail
 
-    test -f "${rna}"
-
     python ${projectDir}/bin/anndata/build-mudata.py \\
         --rna "${rna}" \\
+        --rna-qc "${rna_qc}" \\
         --modalities modalities/*.h5ad \\
         --sample-id "${id}" \\
         --output sample.h5mu

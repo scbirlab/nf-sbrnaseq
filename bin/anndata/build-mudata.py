@@ -10,24 +10,41 @@ import numpy as np
 from scipy.sparse import csr_matrix, issparse
 
 
-def qualify(obj, sample_id):
-    """Create unique sample-qualified observation IDs."""
-    obj = obj.copy()
-    names = [f"{sample_id}:{x}" for x in obj.obs_names]
+def qualify(mdata, sample_id):
+    """Validate barcodes and construct sample-qualified IDs."""
+    mdata = mdata.copy()
+    barcodes = mdata.obs_names.astype(str)
 
-    if len(names) != len(set(names)):
-        raise ValueError("Duplicate cell identifiers")
+    if not sample_id or ":" in sample_id:
+        raise ValueError("Invalid sample identifier")
 
-    obj.obs["cell_barcode"] = list(obj.obs_names)
-    obj.obs["sample_id"] = sample_id
-    obj.obs_names = names
-    return obj
+    if (
+        mdata.obs_names.has_duplicates
+        or any(not x or x.lower() in ("nan", "none") for x in barcodes)
+    ):
+        raise ValueError("Missing or duplicate cell barcodes")
+
+    if "sample_id" in mdata.obs:
+        existing = mdata.obs["sample_id"].dropna().astype(str)
+        if not existing.eq(sample_id).all():
+            raise ValueError("Conflicting sample identifiers")
+
+    if "cell_barcode" in mdata.obs:
+        existing = mdata.obs["cell_barcode"].astype(str)
+        if not np.array_equal(existing, barcodes):
+            raise ValueError("Conflicting cell barcode annotations")
+
+    mdata.obs["cell_barcode"] = list(barcodes)
+    mdata.obs["sample_id"] = sample_id
+    mdata.obs_names = [f"{sample_id}:{x}" for x in barcodes]
+    return mdata
 
 
-def reindex_sparse(obj, names, sample_id):
+
+def reindex_sparse(mdata, names, sample_id):
     """Expand rows without densifying X or its layers."""
-    obj = obj.copy()
-    old = obj.obs_names.get_indexer(names)
+    mdata = mdata.copy()
+    old = mdata.obs_names.get_indexer(names)
 
     present = old >= 0
     valid_rows = np.flatnonzero(present)
@@ -59,16 +76,16 @@ def reindex_sparse(obj, names, sample_id):
             shape=(len(names), matrix.shape[1]),
         ).tocsr()
 
-    X = expand(obj.X)
+    X = expand(mdata.X)
     layers = {
         key: expand(value)
-        for key, value in obj.layers.items()
+        for key, value in mdata.layers.items()
     }
 
     
     import pandas as pd
 
-    obs = obj.obs.reindex(names).copy()
+    obs = mdata.obs.reindex(names).copy()
 
     # Restore identifiers for all cells, including cells
     # structurally absent from this modality.
@@ -126,8 +143,8 @@ def reindex_sparse(obj, names, sample_id):
     output = ad.AnnData(
         X=X,
         obs=obs,
-        var=obj.var.copy(),
-        uns=obj.uns.copy(),
+        var=mdata.var.copy(),
+        uns=mdata.uns.copy(),
     )
     for key, value in layers.items():
         output.layers[key] = value
@@ -135,39 +152,90 @@ def reindex_sparse(obj, names, sample_id):
     return output
 
 
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--rna", required=True)
+    parser.add_argument("--rna-qc", required=True)
     parser.add_argument("--sample-id", required=True)
     parser.add_argument("--output", required=True)
-    parser.add_argument("--modalities", nargs='*')
+    parser.add_argument("--modalities", nargs="*", default=[])
     args = parser.parse_args()
 
-    objects = {
-        "rna": qualify(
-            ad.read_h5ad(args.rna), args.sample_id
-        )
-    }
+    rna = qualify(ad.read_h5ad(args.rna), args.sample_id)
+    rna_qc = qualify(
+        ad.read_h5ad(args.rna_qc), args.sample_id
+    )
 
-    for f in args.modalities:
-        adata = ad.read_h5ad(f)
-        key = adata.uns["__modality__"]
+    if not rna_qc.obs_names.isin(rna.obs_names).all():
+        raise ValueError(
+            "RNA-QC barcodes are absent from unfiltered RNA"
+        )
+
+    objects = {"rna": rna}
+
+    for filename in args.modalities:
+        adata = ad.read_h5ad(filename)
+        key = str(adata.uns["__modality__"])
+
+        if key in objects:
+            raise ValueError(f"Duplicate modality: {key}")
+
         objects[key] = qualify(adata, args.sample_id)
 
+    # Keep all observed barcodes. Never interpret a
+    # structurally absent modality as measured zero.
     names = sorted(set().union(*(
-        set(obj.obs_names)
-        for obj in objects.values()
+        set(_mdata.obs_names) for _mdata in objects.values()
     )))
 
     objects = {
-        key: reindex_sparse(obj, names, args.sample_id)
-        for key, obj in objects.items()
+        key: reindex_sparse(_mdata, names, args.sample_id)
+        for key, _mdata in objects.items()
     }
+
+    # Validate sparse reindexing and record modality presence.
+    for key, _mdata in objects.items():
+        if list(_mdata.obs_names) != names:
+            raise ValueError(f"Misaligned modality: {key}")
+
+        if "present_in_modality" not in _mdata.obs:
+            raise ValueError(f"Missing presence mask: {key}")
+
+        present = _mdata.obs["present_in_modality"].to_numpy(dtype=bool)
+
+        absent = _mdata[~present, :]
+        if absent.X.nnz if issparse(absent.X) else np.any(absent.X):
+            raise ValueError(
+                f"Nonzero counts in absent modality: {key}"
+            )
 
     mdata = mu.MuData(objects)
     mdata.uns["observation_join"] = "union"
     mdata.uns["sample_id"] = args.sample_id
     mdata.update()
+
+    if list(mdata.obs_names) != names:
+        raise ValueError("MuData observation alignment failed")
+
+    qc_names = set(rna_qc.obs_names)
+
+    mdata.obs["rna_qc_pass"] = [
+        name in qc_names for name in names
+    ]
+    mdata.uns["__modalities__"] = ("rna",)
+
+    for key, _mdata in objects.items():
+        mdata.obs[f"has_{key}"] = (
+            _mdata.obs["present_in_modality"]
+            .to_numpy(dtype=bool)
+        )
+        mdata.uns["__modalities__"] += (key,)
+
+    mdata.uns["__modalities__"] = np.asarray(mdata.uns["__modalities__"])
+    if (mdata.obs["rna_qc_pass"] > mdata.obs["has_rna"]).any():
+        raise ValueError("Invalid RNA-QC membership")
+
     mdata.write_h5mu(args.output)
     print(mdata)
 
