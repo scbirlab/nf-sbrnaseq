@@ -102,10 +102,11 @@ process cluster_cells {
       -o cluster \\
    2> >(tee cluster.log)
 
-   if [ -f figures/*.png ]
-   then
-      mv figures/*.png .
-   fi
+   for f in figures/*.png
+   do
+      [ -f "$f" ] || continue
+      mv "$f" .
+   done
    
    """
 }

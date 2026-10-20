@@ -36,10 +36,10 @@ include {
    plot_peaks;
 } from './modules/deeptools.nf'
 include {
-    ExtractMoleculeEnds;
-    ClusterMoleculeEnds;
-    AnnotateEndLoci;
-    AssignEndLoci;
+   ExtractMoleculeEnds;
+   ClusterMoleculeEnds;
+   AnnotateEndLoci;
+   AssignEndLoci;
 } from './modules/ends.nf'
 include { featurecounts } from './modules/featurecounts.nf'
 include { multiQC } from './modules/multiqc.nf'
@@ -49,11 +49,12 @@ include {
 } from './modules/minimap.nf'
 include { CountModSites } from './modules/modifications.nf'
 include {
-    BuildEnd5AnnData;
-    BuildModAnnData;
-    BuildMuData;
-    QCMuData;
-    PlotRNAUMAPs;
+   BuildEnd5AnnData;
+   BuildModAnnData;
+   BuildMuData;
+   QCMuData;
+   PlotRNAUMAPs;
+   PlotModSites;
 } from './modules/mudata.nf'
 include { 
    fetch_genome_from_NCBI; 
@@ -685,9 +686,16 @@ workflow {
       | BuildMuData
       | QCMuData
 
-   cluster_cells.out.anndata
-      .join( BuildMuData.out, by: 0 )
+   multimodal_umap_inputs = cluster_cells.out.anndata
+      .join(BuildMuData.out, by: 0)
+
+   multimodal_umap_inputs 
       | PlotRNAUMAPs
+
+   if ( params.mod_sites ) {
+      multimodal_umap_inputs 
+         | PlotModSites
+   }
 
    trim_logs
       .map { it[1] }

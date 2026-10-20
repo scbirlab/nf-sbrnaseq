@@ -1,0 +1,290 @@
+
+#!/usr/bin/env python
+"""Modification-site UMAP grids and cluster-level heatmaps."""
+
+import argparse
+from pathlib import Path
+
+import anndata as ad
+from carabiner.mpl import grid, figsaver
+from matplotlib.colors import Normalize
+import mudata as mu
+import numpy as np
+import pandas as pd
+from scipy.sparse import issparse
+
+
+def vector(matrix, rows, column):
+    """Read one feature without densifying the full matrix."""
+    x = matrix[rows, column]
+    return x.toarray().ravel() if issparse(x) else np.asarray(x).ravel()
+
+
+def run(clustered, mudata, prefix, fmt, min_depth, page_size):
+    rna = ad.read_h5ad(clustered)
+    mdata = mu.read_h5mu(mudata)
+
+    if "X_umap" not in rna.obsm or "leiden" not in rna.obs:
+        raise ValueError("RNA clustering or UMAP missing")
+    if "mod" not in mdata.mod:
+        raise ValueError("Modification modality missing")
+
+    mod = mdata.mod["mod"]
+    for name in (
+        "ref_count", "alt_count",
+        "callable_depth", "ref_alt_depth"
+    ):
+        if name not in mod.layers:
+            raise ValueError(f"Missing modification layer: {name}")
+
+    if "sample_id" not in rna.obs:
+        raise ValueError("RNA sample_id missing")
+    if not rna.obs_names.is_unique or not mod.obs_names.is_unique:
+        raise ValueError("Duplicate barcode identifiers")
+
+    names = pd.Index([
+        f"{sample}:{barcode}"
+        for sample, barcode in zip(
+            rna.obs["sample_id"].astype(str),
+            rna.obs_names,
+        )
+    ])
+
+    indices = mod.obs_names.get_indexer(names)
+    if np.any(indices < 0):
+        raise ValueError("RNA cells absent from MuData")
+
+    present = mod.obs["present_in_modality"].to_numpy(
+        dtype=bool
+    )[indices]
+
+    coords = np.asarray(rna.obsm["X_umap"])
+    clusters = rna.obs["leiden"].astype(str).to_numpy()
+    cluster_names = sorted(
+        np.unique(clusters),
+        key=lambda x: (not x.isdigit(), int(x) if x.isdigit() else x),
+    )
+
+    saver = figsaver(format=fmt)
+    prefix = Path(prefix)
+    prefix.parent.mkdir(parents=True, exist_ok=True)
+
+    sites = mod.var_names.tolist()
+    summary = []
+    coverage_rows = []
+    fraction_rows = []
+
+    for j, site in enumerate(sites):
+        ref = vector(mod.layers["ref_count"], indices, j)
+        alt = vector(mod.layers["alt_count"], indices, j)
+        depth = vector(mod.layers["callable_depth"], indices, j)
+        denominator = ref + alt
+
+        frac = np.divide(
+            alt, denominator,
+            out=np.full(len(alt), np.nan, dtype=float),
+            where=(denominator >= min_depth) & present,
+        )
+
+        row = {
+            "site_id": site,
+            "n_cells_callable": int(np.sum((depth > 0) & present)),
+            "n_cells_ref_alt": int(
+                np.sum((denominator >= min_depth) & present)
+            ),
+            "total_callable_depth": int(depth.sum()),
+            "total_ref_count": int(ref.sum()),
+            "total_alt_count": int(alt.sum()),
+        }
+        for field in (
+            "feature_id", "feature", "ref_base",
+            "alt_base", "modification",
+        ):
+            if field in mod.var:
+                row[field] = mod.var.iloc[j][field]
+        summary.append(row)
+
+        coverage_row = {"site_id": site}
+        fraction_row = {"site_id": site}
+
+        for cluster in cluster_names:
+            selected = (clusters == cluster) & present
+            n = int(selected.sum())
+            coverage_row[cluster] = (
+                float(np.mean(depth[selected] > 0)) if n else np.nan
+            )
+            denom_sum = denominator[selected].sum()
+            fraction_row[cluster] = (
+                float(alt[selected].sum() / denom_sum)
+                if denom_sum >= min_depth else np.nan
+            )
+
+        coverage_rows.append(coverage_row)
+        fraction_rows.append(fraction_row)
+
+    pd.DataFrame(summary).to_csv(
+        f"{prefix}.sites.csv", index=False
+    )
+
+    coverage_df = pd.DataFrame(coverage_rows).set_index("site_id")
+    fraction_df = pd.DataFrame(fraction_rows).set_index("site_id")
+
+    coverage_df.to_csv(f"{prefix}.cluster-coverage.csv")
+    fraction_df.to_csv(f"{prefix}.cluster-alt-fraction.csv")
+
+    def heatmap(frame, label, title):
+        fig, ax = grid(
+            aspect_ratio=1.4,
+            panel_size=max(6, min(14, len(sites) * 0.22)),
+        )
+
+        image = ax.imshow(
+            frame.to_numpy(dtype=float),
+            aspect="auto", interpolation="nearest",
+            cmap="cividis", vmin=0, vmax=1,
+        )
+        fig.colorbar(image, ax=ax, label=label)
+        ax.set_xticks(range(len(frame.columns)))
+        ax.set_xticklabels(frame.columns, rotation=90)
+        ax.set_yticks(range(len(frame.index)))
+        ax.set_yticklabels(frame.index, fontsize=6)
+        ax.set(
+            xlabel="Leiden cluster", 
+            title=title,
+        )
+
+        saver(
+            fig=fig,
+            name=f"{prefix}.{title}",
+            df=frame.reset_index(),
+        )
+
+    heatmap(
+        coverage_df,
+        "Fraction of cells with callable coverage",
+        "cluster-coverage",
+    )
+    heatmap(
+        fraction_df,
+        "Pooled ALT / (REF + ALT)",
+        "cluster-alt-fraction",
+    )
+
+    # Each feature gets one coverage panel and one ALT-fraction panel.
+    def umap_pages(kind):
+        for offset in range(0, len(sites), page_size):
+            page = sites[offset:offset + page_size]
+            ncol = min(6, len(page))
+            fig, axes = grid(
+                ncol=ncol,
+                nrow=int(np.ceil(len(page) / ncol)),
+                aspect_ratio=1.1,
+                panel_size=5.,
+            )
+
+            plot_data = pd.DataFrame({
+                "cell_id": names,
+                "UMAP_1": coords[:, 0],
+                "UMAP_2": coords[:, 1],
+                "leiden": clusters,
+            })
+
+            for ax, site in zip(fig.axes, page):
+                j = mod.var_names.get_loc(site)
+
+                depth = vector(
+                    mod.layers["callable_depth"], indices, j
+                )
+                ref = vector(mod.layers["ref_count"], indices, j)
+                alt = vector(mod.layers["alt_count"], indices, j)
+                denominator = ref + alt
+
+                if kind == "coverage":
+                    values = np.where(present, depth, np.nan)
+                    valid = present & (depth > 0)
+                    norm = "log"
+                else:
+                    valid = present & (denominator >= min_depth)
+                    values = np.divide(
+                        alt, denominator,
+                        out=np.full(len(alt), np.nan),
+                        where=valid,
+                    )
+                    if kind == "fraction":
+                        norm = Normalize(
+                            vmin=0,
+                            vmax=1 if kind == "fraction"
+                            else max(1, float(np.nanmax(colour[valid]))),
+                        )
+                color = values
+
+                plot_data[site] = values
+
+                # Unmeasured or insufficiently covered cells.
+                ax.scatter(
+                    *coords[~valid].T,
+                    s=1., 
+                    c="lightgrey",
+                    rasterized=True,
+                )
+
+                if np.any(valid):
+                    points = ax.scatter(
+                        *coords[valid].T,
+                        c=color[valid],
+                        cmap="cividis",
+                        norm=norm,
+                        s=1.5,
+                        rasterized=True,
+                    )
+                    fig.colorbar(points, ax=ax)
+
+                ax.set(
+                    title=str(site),
+                    xlabel="UMAP 1",
+                    ylabel="UMAP 2",
+                )
+                ax.set_aspect("equal")
+
+            for ax in fig.axes[len(page):]:
+                ax.axis("off")
+
+            saver(
+                fig=fig,
+                name=(
+                    f"{prefix}.umap-{kind}."
+                    f"page{offset // page_size + 1:02d}"
+                ),
+                df=plot_data,
+            )
+
+    umap_pages("coverage")
+    umap_pages("fraction")
+
+    print(
+        f"Plotted {len(sites)} modification sites "
+        f"across {len(names)} RNA-QC-passing cells"
+    )
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--clustered", required=True)
+    parser.add_argument("--mudata", required=True)
+    parser.add_argument("--output", default="modsites")
+    parser.add_argument("--plot-format", default="png")
+    parser.add_argument("--min-depth", type=int, default=1)
+    parser.add_argument("--page-size", type=int, default=24)
+    args = parser.parse_args()
+
+    if args.min_depth < 1 or args.page_size < 1:
+        parser.error("min-depth and page-size must be positive")
+
+    run(
+        args.clustered, args.mudata, args.output,
+        args.plot_format, args.min_depth, args.page_size,
+    )
+
+
+if __name__ == "__main__":
+    main()

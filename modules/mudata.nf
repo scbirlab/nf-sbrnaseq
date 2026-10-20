@@ -154,7 +154,43 @@ process PlotRNAUMAPs {
         --clustered "${clustered}" \\
         --mudata "${h5mu}" \\
         --output umap
-    
+
+    """
+}
+
+
+
+process PlotModSites {
+    tag "${id}"
+    label "some_mem"
+
+    publishDir(
+        "${params.outputs}/visualisation/modifications",
+        mode: 'copy',
+        saveAs: { "${id}.${it}" },
+    )
+
+    input:
+    tuple val( id ), path( clustered ), path( h5mu )
+
+    output:
+    tuple val( id ), path( "modsites.*.png" ), emit: figures
+    tuple val( id ), path( "modsites.*.csv" ), emit: tables
+
+    script:
+    """
+    set -euox pipefail
+
+    export MPLBACKEND=Agg
+    export MPLCONFIGDIR="mpl"
+    export NUMBA_CACHE_DIR="numba"
+    mkdir "\$MPLCONFIGDIR" "\$NUMBA_CACHE_DIR"
+
+    python ${projectDir}/bin/anndata/plot-mod-sites.py \\
+        --clustered "${clustered}" \\
+        --mudata "${h5mu}" \\
+        --output modsites \\
+        --min-depth 1
     """
 }
 
