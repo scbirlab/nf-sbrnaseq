@@ -101,7 +101,7 @@ def annotate(source, output):
             distance = int(distance)
 
         writer.writerow({
-            "locus_id": locus_id,
+            "end5_locus_id": locus_id,
             "contig": chrom,
             "start1": start0 + 1,
             "end1": end0,

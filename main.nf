@@ -543,7 +543,7 @@ workflow {
       id_ends_genome_ch
          .map { v -> tuple( v[-1], v[0], v[1] ) }  // genome_acc, id, ends
          .combine(
-            AnnotateEndLoci.out,
+            ClusterMoleculeEnds.out.loci,
             by: 0,
          )  // genome_acc, id, ends, loci
          .map { v -> v[1..3] }
