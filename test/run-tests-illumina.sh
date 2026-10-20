@@ -67,4 +67,5 @@ nextflow run "$REPO" \
     --end5_enabled \
     --end5_read 1 \
     --end5_boundary 5 \
+    --min_counts_per_cell 10 \
     --strand 1
