@@ -225,7 +225,7 @@ def _build(args: Namespace) -> None:
         grid_columns=[
             "n_cells_by_counts", 
             "total_counts", 
-            "length", 
+            "Length", 
             "pct_dropout_by_counts",
             "pseudobulk_read_count",
         ],
