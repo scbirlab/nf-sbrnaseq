@@ -63,6 +63,9 @@ echo "Command:    ${CMD[*]}"
 echo
 
 docker run --rm \
+    --user "$(id -u):$(id -g)" \
+    -e MPLCONFIGDIR=/tmp/matplotlib-cache \
+    -e NUMBA_CACHE_DIR=/tmp/numba-cache \
     --network none \
     --workdir /workspace \
     --mount "type=bind,source=$REPO,target=/workspace,readonly" \
