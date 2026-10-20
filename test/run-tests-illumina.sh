@@ -64,9 +64,7 @@ nextflow run "$REPO" \
     --outputs "$outdir" \
     --trim_qual 5 \
     --min_length '9:38' \
-    --mod_sites "$HERE/illumina/trna-mod/trna-sites.tsv" \
-    --sites_join_on feature \
-    --end5_enabled true \
+    --end5_enabled \
     --end5_read 1 \
     --end5_boundary 5 \
     --strand 1

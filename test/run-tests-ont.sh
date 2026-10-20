@@ -29,6 +29,7 @@ nextflow run "$script_dir"/.. \
     --sample_sheet "$script_dir"/ont/sample-sheet.csv \
     --inputs "$script_dir"/ont/inputs \
     --fastq_dir "$script_dir"/ont/fastq \
+    --end5_enabled \
     --end5_read 1 \
     --end5_boundary 5 \
     --outputs "$script_dir"/ont/outputs
