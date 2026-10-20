@@ -134,7 +134,7 @@ process AnnotateEndLoci {
     bedtools closest \\
         -a "${loci_bed}" \\
         -b "features.bed" \\
-        -s -D a -t all \\
+        -s -D a -t first \\
     > annotated.bed
 
     python ${projectDir}/bin/annotate-end-loci.py \\
