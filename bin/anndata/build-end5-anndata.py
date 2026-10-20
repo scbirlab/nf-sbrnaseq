@@ -85,6 +85,7 @@ def main():
     ).tocsr()
 
 
+    obs = qc.set_index("cell_barcode").reindex(cells)
     for column in (
         "total_ends_count",
         "assigned_ends_count",
@@ -97,7 +98,6 @@ def main():
                 errors="raise",
             )
 
-    obs = qc.set_index("cell_barcode").reindex(cells)
     obs["sample_id"] = args.sample_id
 
     adata = ad.AnnData(
