@@ -104,8 +104,8 @@ process cluster_cells {
 
    for f in figures/*.png
    do
-      [ -f "$f" ] || continue
-      mv "$f" .
+      [ -f "\$f" ] || continue
+      mv "\$f" .
    done
    
    """
