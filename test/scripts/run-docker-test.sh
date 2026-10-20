@@ -12,7 +12,7 @@ set -euo pipefail
 # Override image:
 #   IMAGE=ghcr.io/scbirlab/nf-sbrnaseq:latest scripts/run-docker-test.sh ...
 
-REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO="$(readlink -f "$(dirname "${BASH_SOURCE[0]}")/../..")"
 IMAGE="${IMAGE:-nf-sbrnaseq:test}"
 PYTHON=/opt/conda/envs/env/bin/python
 

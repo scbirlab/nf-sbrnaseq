@@ -52,6 +52,7 @@ include {
     BuildEnd5AnnData;
     BuildModAnnData;
     BuildMuData;
+    QCMuData;
 } from './modules/mudata.nf'
 include { 
    fetch_genome_from_NCBI; 
@@ -681,6 +682,7 @@ workflow {
       )
       .map { v -> tuple(v[0], v[1], v[2], v[3..-1]) }
       | BuildMuData
+      | QCMuData
 
 
    trim_logs
