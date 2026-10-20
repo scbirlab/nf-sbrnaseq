@@ -21,7 +21,7 @@ jobs:
     - run: df -h
     - uses: actions/checkout@v4
     - name: Build test image
-        run: docker build -t nf-sbrnaseq:test .
+      run: docker build -t nf-sbrnaseq:test .
 
     - name: Test Python environment
       run: |
