@@ -67,14 +67,6 @@ def main():
 
     print_err(f"tRNA PCA input: {adata_trna.shape}")
 
-    n_excluded = int((~observed).sum())
-    adata_trna = adata_trna[observed].copy()
-    adata_trna.X = adata_trna.layers["counts"].copy()
-    adata_trna.uns.pop("log1p", None)
-
-    sc.pp.normalize_total(adata_trna)
-    sc.pp.log1p(adata_trna)
-
     n_pcs = min(30, adata_trna.n_obs - 1, adata_trna.n_vars - 1)
     if n_pcs < 2:
         raise ValueError("Insufficient tRNA PCA dimensions")
