@@ -393,7 +393,7 @@ def _cluster(args: Namespace) -> None:
     else:
         adata.var["highly_variable_non_rRNA"] = (adata.var["not_is_rRNA"] & adata.var["highly_variable"])
         print_err(f"Found {adata.var['highly_variable_non_rRNA'].sum()} highly variable genes!")
-        use_highly_variable = adata.var['highly_variable_non_rRNA'].sum() >= 3
+        use_highly_variable = False #adata.var['highly_variable_non_rRNA'].sum() >= 3
 
     
     print_err("Applying PCA...")
@@ -417,7 +417,7 @@ def _cluster(args: Namespace) -> None:
         adata,
         n_comps=n_comps,
         mask_var=mask,
-        random_state=0,
+        random_state=42,
     )
 
     print_err("Getting nearest neighbours...")
@@ -426,7 +426,7 @@ def _cluster(args: Namespace) -> None:
         n_neighbors=min(15, adata.n_obs - 1),
         metric="euclidean",
         use_rep="X_pca",
-        random_state=0,
+        random_state=42,
     )
 
     print_err("Carrying out Leiden clustering...")
@@ -436,7 +436,7 @@ def _cluster(args: Namespace) -> None:
         resolution=1.0,
         flavor="igraph",
         directed=False,
-        random_state=0,
+        random_state=42,
     )
 
     print_err(
@@ -456,9 +456,9 @@ def _cluster(args: Namespace) -> None:
     print_err("Embedding as UMAP...")
     sc.tl.umap(
         adata,
-        min_dist=0.1,
-        spread=1.0,
-        random_state=0,
+        min_dist=.1,
+        spread=1.,
+        random_state=42,
     )
 
     save_anndata(adata, f"{args.output}", printf=print_err)

@@ -53,9 +53,14 @@ include {
    BuildModAnnData;
    BuildMuData;
    QCMuData;
+} from './modules/mudata.nf'
+include {
    PlotRNAUMAPs;
    PlotModSites;
-} from './modules/mudata.nf'
+   EmbedTRNA;
+   PlotEnd5Usage;
+   PlotGeneCorrelations;
+} from './modules/visualization.nf'
 include { 
    fetch_genome_from_NCBI; 
    prefetch_from_SRA;
@@ -686,6 +691,13 @@ workflow {
       | BuildMuData
       | QCMuData
 
+   // RNA-only analyses run independently of MuData.
+   cluster_cells.out.anndata 
+      | (
+         EmbedTRNA 
+         & PlotGeneCorrelations
+      )
+
    multimodal_umap_inputs = cluster_cells.out.anndata
       .join(BuildMuData.out, by: 0)
 
@@ -695,6 +707,10 @@ workflow {
    if ( params.mod_sites ) {
       multimodal_umap_inputs 
          | PlotModSites
+   }
+   if (params.end5_enabled) {
+      multimodal_umap_inputs 
+         | PlotEnd5Usage
    }
 
    trim_logs

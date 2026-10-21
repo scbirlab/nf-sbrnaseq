@@ -36,7 +36,10 @@ def biotype_groups(adata):
     rrna = biotype.eq("rrna")
 
     other_ncrna = (
-        biotype.str.contains(("ncrna", "non_coding", "non-coding", "srna", "antisense"))
+        biotype.str.contains(
+            "|".join([
+                "ncrna", "non_coding", "non-coding", "srna", "antisense"
+        ]))
         | biotype.isin(["rna", "scrna", "snrna"])
     ) & ~(trna | tmrna | rrna)
 
@@ -89,16 +92,27 @@ def plot_grid(coords, frame, columns, filename, fmt, ncol=6):
             )
             if col_is_categorical:
                 colors = colors.astype("category")
-                for i in np.unique(colors.cat.codes):
+                unique_cats = np.unique(colors)
+                min_cat = sorted(colors)[0]
+                for i in np.unique(colors):
+                    if len(unique_cats) == 2 and i == min_cat:
+                        plotter(
+                            *coords[colors.cat.codes == i].T,
+                            label=i,
+                            color="lightgrey",
+                        )
                     plotter(
                         *coords[colors.cat.codes == i].T,
                         label=i,
                     )
                 add_legend(ax)
             if not col_is_categorical:
+                mask = np.isfinite(colors)
+                if np.all(colors >= 0.):
+                    mask = (colors != 0.) & mask
                 scatter = plotter(
-                    *coords.T,
-                    c=colors,
+                    *coords[mask].T,
+                    c=colors[mask],
                     cmap="cividis",
                     norm="log" if use_log else None,
                 )
@@ -268,8 +282,8 @@ def main():
     )
 
     print(
-        f"Plotted {len(groups['trna_tmrna'])} tRNA/tmRNA "
-        f"and {len(groups['ncrna'])} ncRNA features"
+        f"Plotted {len(_biotype_groups['trna_tmrna'])} tRNA/tmRNA "
+        f"and {len(_biotype_groups['ncrna'])} ncRNA features"
     )
 
 

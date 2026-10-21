@@ -134,14 +134,14 @@ def run(clustered, mudata, prefix, fmt, min_depth, page_size):
     fraction_df.to_csv(f"{prefix}.cluster-alt-fraction.csv")
 
     def heatmap(frame, label, title, row_idx=None, col_idx=None):
-        for_hm = frame.fillna(0.).values
+        for_hm = frame.fillna(0.)
         if row_idx is not None:
-            for_hm = for_hm[row_idx]
+            for_hm = for_hm.iloc[row_idx]
         if col_idx is not None:
-            for_hm = for_hm[:,col_idx]
+            for_hm = for_hm.iloc[:,col_idx]
         hm = sns.clustermap(
             for_hm,
-            metric="euclidean",
+            metric="cosine",
             row_cluster=row_idx is None,
             col_cluster=col_idx is None,
             cbar_kws={"label": label},
