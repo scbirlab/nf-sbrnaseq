@@ -42,4 +42,5 @@ dependencies:
         - pysam
         - 'RSeQC'
         - 'scanpy[leiden]>=1.10.4'
+        - seaborn
         - 'streq>=0.0.4'
