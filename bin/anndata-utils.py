@@ -276,13 +276,6 @@ def _filter(args: Namespace) -> None:
         np.arange(0, max(101, int(cell_counts.max()) + 2), 10),
     )))
 
-    keep_cells = (
-        (cell_counts > 0)
-        & (cell_counts >= args.min_counts_per_cell)
-    )
-
-    adata = adata[keep_cells, :].copy()
-
     retained = np.array([
         np.count_nonzero(cell_counts >= threshold)
         for threshold in thresholds
@@ -310,14 +303,17 @@ def _filter(args: Namespace) -> None:
         df=retention,
     )
 
+    if adata.n_obs == 0:
+        raise ValueError(
+            "No cells passed the UMI threshold"
+        )
+
     # Apply explicit cell threshold.
     keep_cells = cell_counts >= args.min_counts_per_cell
     adata = adata[keep_cells, :].copy()
 
     if adata.n_obs == 0:
-        raise ValueError(
-            "No cells passed the UMI threshold"
-        )
+        raise ValueError("No cells passed the UMI threshold")
 
     # Filter genes based on detection among retained cells.
     sc.pp.filter_genes(
