@@ -267,13 +267,21 @@ def _filter(args: Namespace) -> None:
     # Use untransformed molecule counts for filtering.
     adata.X = adata.layers["counts"].copy()
 
-    cell_counts = np.asarray(adata.X.sum(axis=1)).ravel()
-
+    cell_counts = np.asarray(
+        adata.layers["counts"].sum(axis=1)
+    ).ravel()
     # Retention curve independent of the chosen threshold.
     thresholds = np.unique(np.concatenate((
         np.array([0, args.min_counts_per_cell]),
         np.arange(0, max(101, int(cell_counts.max()) + 2), 10),
     )))
+
+    keep_cells = (
+        (cell_counts > 0)
+        & (cell_counts >= args.min_counts_per_cell)
+    )
+
+    adata = adata[keep_cells, :].copy()
 
     retained = np.array([
         np.count_nonzero(cell_counts >= threshold)
@@ -316,12 +324,28 @@ def _filter(args: Namespace) -> None:
         adata,
         min_cells=args.min_cells_per_gene,
     )
+    # Remove cells left empty after gene filtering.
+    remaining_counts = np.asarray(
+        adata.layers["counts"].sum(axis=1)
+    ).ravel()
+
+    n_empty = int(np.count_nonzero(remaining_counts == 0))
+    print_err(f"Cells emptied by gene filtering: {n_empty}")
+
+    adata = adata[remaining_counts > 0].copy()
 
     if adata.n_vars == 0:
         raise ValueError(
             "No genes passed the detection threshold"
         )
+    remaining = np.asarray(
+        adata.layers["counts"].sum(axis=1)
+    ).ravel()
 
+    adata = adata[remaining > 0, :].copy()
+
+    if adata.n_obs == 0:
+        raise ValueError("No cells with nonzero counts after filtering")
     # Record the applied thresholds and retention.
     adata.uns["filtering"] = {
         "min_counts_per_cell": args.min_counts_per_cell,
@@ -362,8 +386,9 @@ def _cluster(args: Namespace) -> None:
         raise ValueError("Missing raw counts layer")
 
     # Ensure only cells with positive total counts are normalised.
-    library_sizes = adata.layers["counts"].sum(axis=1).ravel()
-
+    library_sizes = np.asarray(
+        adata.layers["counts"].sum(axis=1)
+    ).ravel()
     if np.any(library_sizes <= 0):
         raise ValueError(
             "Cannot normalise cells with zero molecule counts"

@@ -51,7 +51,7 @@ process ClusterMoleculeEnds {
     )
 
     input:
-    tuple val( id ), path( ends )
+    tuple val( id ), path( ends, stageAs: 'ends/?????.tsv' )
     val min_support
     val max_width
 
@@ -63,7 +63,7 @@ process ClusterMoleculeEnds {
     """
     set -euox pipefail
 
-    zcat "${ends}" \\
+    zcat ${ends} \\
     | awk -F '\\t' -v OFS='\\t' '
         NR == 1 {
             for ( i=1; i<=NF; i++ ) header[\$i] = i

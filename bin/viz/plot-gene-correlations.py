@@ -28,8 +28,7 @@ def main():
     rna = ad.read_h5ad(args.clustered)
 
     counts = rna.layers["counts"]
-    detected = (counts > 0).sum(axis=0).ravel()
-
+    detected = np.asarray((counts > 0).sum(axis=0)).ravel()
     indices = np.flatnonzero(detected >= args.min_cells_per_gene)
     if len(indices) < 2:
         raise ValueError(f"Insufficient genes with at least {args.min_cells_per_gene=}")
@@ -82,7 +81,7 @@ def main():
             fontsize=10.,
         )
         hm.savefig(
-            f"correlations.{args.plot_format}", 
+            f"{args.output}.heatmap.{args.plot_format}", 
             dpi=300, 
             bbox_inches="tight",
         )

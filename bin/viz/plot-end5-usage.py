@@ -47,17 +47,17 @@ def main():
         raise ValueError("Missing RNA cells in 5'-end modality")
 
     counts = mdata_end5.X[indices]
-    depth = counts.sum(axis=1).ravel()
+    depth = np.asarray(counts.sum(axis=1)).ravel()
     present = mdata_end5.obs["present_in_modality"].astype(bool).values[indices]
     eligible = present & (depth >= args.min_ends)
 
     if not eligible.any() or mdata_end5.n_vars == 0:
         raise ValueError("No sufficiently covered 5'-end data")
 
-    clusters = rna.obs["leiden"].astype(str)
-    labels = sorted(clusters.unique())
+    clusters = rna.obs["leiden"].astype(str).to_numpy()
+    labels = sorted(np.unique(clusters))
 
-    site_depth = counts[eligible].sum(axis=0).ravel()
+    site_depth = np.asarray(counts[eligible].sum(axis=0)).ravel()
     order = np.argsort(-site_depth, kind="stable")
     selected = order[:args.top_loci]
 
@@ -65,7 +65,10 @@ def main():
     for j in selected:
         site = mdata_end5.var_names[j]
         these_counts = column(counts, j)
-        record = {"locus_id": site, "total_count": int(x.sum())}
+        record = {
+            "locus_id": site,
+            "total_count": int(these_counts.sum()),
+        }
 
         for cluster in labels:
             mask = eligible & (clusters == cluster)
@@ -84,26 +87,28 @@ def main():
     mdata_end5.var.to_csv(f"{args.output}.annotations.csv")
 
     def heatmap(frame, label, title, row_idx=None, col_idx=None):
-        for_hm = frame.fillna(0.)
+        for_hm = frame.copy()
         if row_idx is not None:
             for_hm = for_hm.iloc[row_idx]
         if col_idx is not None:
-            for_hm = for_hm.iloc[:,col_idx]
+            for_hm = for_hm.iloc[:, col_idx]
+
+        missing = for_hm.isna()
         hm = sns.clustermap(
-            for_hm,
+            for_hm.fillna(0.),
             metric="cosine",
-            row_cluster=row_idx is None,
-            col_cluster=col_idx is None,
+            row_cluster=row_idx is None and len(for_hm) > 1,
+            col_cluster=col_idx is None and len(for_hm.columns) > 1,
             cbar_kws={"label": label},
             cmap="cividis",
-            vmin=0., 
+            vmin=0.,
             vmax=1.,
             xticklabels=True,
             yticklabels=True,
-            mask=~np.isnan(frame.values),
+            mask=missing.to_numpy(),
             figsize=(
-                max(6, min(14, for_hm.shape[1] * .1)),
-                max(6, min(14, for_hm.shape[0] * 4.)), 
+                max(6, min(14, for_hm.shape[1] * .4)),
+                max(6, min(14, for_hm.shape[0] * .2)),
             ),
         )
         hm.ax_heatmap.set_yticklabels(
@@ -111,7 +116,7 @@ def main():
             fontsize=2.,
         )
         hm.savefig(
-            f"{prefix}.{title}.{args.plot_format}", 
+            f"{args.output}.{title}.{args.plot_format}", 
             dpi=300, 
             bbox_inches="tight",
         )
@@ -123,6 +128,9 @@ def main():
         "Fraction of assigned ends",
         "Relative 5-end locus usage",
     )
+
+    saver = figsaver(format=args.plot_format)
+    xy = np.asarray(rna.obsm["X_umap"])
 
     # Site-specific UMAPs, paginated.
     for offset in range(0, len(selected), 24):
@@ -145,20 +153,21 @@ def main():
             these_counts = column(counts, j)
 
             fraction = np.divide(
-                these_counts, depth,
-                out=np.full(len(x), np.nan, dtype=float),
+                these_counts,
+                depth,
+                out=np.full(len(these_counts), np.nan, dtype=float),
                 where=eligible,
             )
             data[site] = fraction
 
             ax.scatter(
-                *rna.obsm["X_umap"].loc[~eligible].T,
+                *xy[~eligible].T,
                 c="lightgrey",
                 s=1,
                 rasterized=True,
             )
             scatter = ax.scatter(
-                *rna.obsm["X_umap"].loc[eligible].T,
+                *xy[eligible].T,
                 c=fraction[eligible],
                 cmap="cividis",
                 vmin=0,

@@ -36,28 +36,41 @@ def main():
     if "is_tRNA" not in rna.var:
         raise ValueError("Missing is_tRNA")
     
-    adata_trna = rna[:, rna.var["is_tRNA"]].copy()
+    adata_trna = rna[:, rna.var["is_tRNA"].astype(bool)].copy()
+
+    # Filter features using raw counts, not previously normalised X.
+    adata_trna.X = adata_trna.layers["counts"].copy()
     sc.pp.filter_genes(
-        adata_trna, 
+        adata_trna,
         min_cells=args.min_cells_per_gene,
     )
 
     if adata_trna.n_vars < 3:
         raise ValueError("Fewer than three qualifying tRNAs")
 
-    depth = (
+    depth = np.asarray(
         adata_trna.layers["counts"].sum(axis=1)
-        if "counts" in adata_trna.layers 
-        else adata_trna.X.sum(axis=1)
-    ).ravel() 
+    ).ravel()
 
     observed = depth > 0
     if observed.sum() < 5:
         raise ValueError("Fewer than five tRNA-positive cells")
 
     n_excluded = int((~observed).sum())
+    adata_trna = adata_trna[observed, :].copy()
+
+    # Clear inherited log-normalisation metadata.
+    adata_trna.uns.pop("log1p", None)
+
+    sc.pp.normalize_total(adata_trna)
+    sc.pp.log1p(adata_trna)
+
+    print_err(f"tRNA PCA input: {adata_trna.shape}")
+
+    n_excluded = int((~observed).sum())
     adata_trna = adata_trna[observed].copy()
     adata_trna.X = adata_trna.layers["counts"].copy()
+    adata_trna.uns.pop("log1p", None)
 
     sc.pp.normalize_total(adata_trna)
     sc.pp.log1p(adata_trna)
@@ -66,7 +79,33 @@ def main():
     if n_pcs < 2:
         raise ValueError("Insufficient tRNA PCA dimensions")
 
-    sc.pp.pca(adata_trna, n_comps=n_pcs, random_state=42)
+    from scipy.sparse import issparse
+
+    if issparse(adata_trna.X) and adata_trna.n_vars < 100:
+        adata_trna.X = adata_trna.X.toarray()
+        assert adata_trna.X.shape == (adata_trna.n_obs, adata_trna.n_vars)
+        assert np.isfinite(adata_trna.X).all()
+
+    x = np.asarray(adata_trna.X)
+
+    print_err(f"AnnData shape: {adata_trna.shape}")
+    print_err(f"PCA matrix shape: {x.shape}")
+    print_err(f"PCA matrix type: {type(adata_trna.X)}")
+    print_err(f"PCA matrix dtype: {x.dtype}")
+    print_err(f"tRNA matrix: {adata_trna.shape}")
+    print_err(
+        f"Inherited HVGs: "
+        f"{adata_trna.var['highly_variable'].sum()}"
+        if "highly_variable" in adata_trna.var
+        else "No HVG annotation"
+    )
+    sc.pp.pca(
+        adata_trna,
+        n_comps=n_pcs,
+        mask_var=None,
+        svd_solver="full" if adata_trna.n_vars < 100 and not issparse(adata_trna.X) else "arpack",
+        random_state=42,
+    )
     sc.pp.neighbors(
         adata_trna,
         n_neighbors=min(15, adata_trna.n_obs - 1),
@@ -79,7 +118,7 @@ def main():
     adata_trna.uns["trna_embedding"] = {
         "n_cells_input": rna.n_obs,
         "n_cells_excluded": n_excluded,
-        "n_trna_features": obj.n_vars,
+        "n_trna_features": adata_trna.n_vars,
         "normalization": "tRNA total, log1p",
     }
 
@@ -146,8 +185,8 @@ def main():
     )
 
     print_err(
-        f"tRNA embedding: {obj.n_obs} cells, "
-        f"{obj.n_vars} genes; excluded {n_excluded} cells"
+        f"tRNA embedding: {adata_trna.n_obs} cells, "
+        f"{adata_trna.n_vars} genes; excluded {n_excluded} cells"
     )
 
 

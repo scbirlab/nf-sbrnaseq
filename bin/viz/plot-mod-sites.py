@@ -134,6 +134,7 @@ def run(clustered, mudata, prefix, fmt, min_depth, page_size):
     fraction_df.to_csv(f"{prefix}.cluster-alt-fraction.csv")
 
     def heatmap(frame, label, title, row_idx=None, col_idx=None):
+        missing = frame.isna()
         for_hm = frame.fillna(0.)
         if row_idx is not None:
             for_hm = for_hm.iloc[row_idx]
@@ -141,7 +142,7 @@ def run(clustered, mudata, prefix, fmt, min_depth, page_size):
             for_hm = for_hm.iloc[:,col_idx]
         hm = sns.clustermap(
             for_hm,
-            metric="cosine",
+            metric="euclidean",
             row_cluster=row_idx is None,
             col_cluster=col_idx is None,
             cbar_kws={"label": label},
@@ -150,10 +151,10 @@ def run(clustered, mudata, prefix, fmt, min_depth, page_size):
             vmax=1.,
             xticklabels=True,
             yticklabels=True,
-            mask=~np.isnan(frame.values),
+            mask=missing,
             figsize=(
-                max(6, min(14, len(clusters) * .1)),
-                max(6, min(14, len(sites) * 4.)), 
+                max(6, min(14, for_hm.shape[1] * .5)),
+                max(6, min(14, for_hm.shape[0] * .25)),
             ),
         )
         hm.ax_heatmap.set_yticklabels(

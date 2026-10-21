@@ -150,7 +150,7 @@ process PlotGeneCorrelations {
     tuple val( id ), path( clustered )
 
     output:
-    tuple val( id ), path( "correlations.png" ), emit: figures
+    tuple val( id ), path( "correlations.*.png" ), emit: figures
 
     script:
     """
