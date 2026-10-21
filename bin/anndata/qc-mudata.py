@@ -84,8 +84,9 @@ def main():
     if len(depths) > 1:
         fig, axes = grid(
             ncol=len(depths) - 1,
+            squeeze=False,
         )
-        for ax, column in zip(axes, depths[1:]):
+        for ax, column in zip(fig.axes, depths[1:]):
             ax.scatter(
                 "rna_depth", 
                 column,

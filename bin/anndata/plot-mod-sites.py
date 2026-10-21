@@ -12,6 +12,7 @@ import mudata as mu
 import numpy as np
 import pandas as pd
 from scipy.sparse import issparse
+import seaborn as sns
 
 
 def vector(matrix, rows, column):
@@ -31,8 +32,10 @@ def run(clustered, mudata, prefix, fmt, min_depth, page_size):
 
     mod = mdata.mod["mod"]
     for name in (
-        "ref_count", "alt_count",
-        "callable_depth", "ref_alt_depth"
+        "ref_count", 
+        "alt_count",
+        "callable_depth", 
+        "ref_alt_depth",
     ):
         if name not in mod.layers:
             raise ValueError(f"Missing modification layer: {name}")
@@ -54,9 +57,7 @@ def run(clustered, mudata, prefix, fmt, min_depth, page_size):
     if np.any(indices < 0):
         raise ValueError("RNA cells absent from MuData")
 
-    present = mod.obs["present_in_modality"].to_numpy(
-        dtype=bool
-    )[indices]
+    present = mod.obs["present_in_modality"].to_numpy(dtype=bool)[indices]
 
     coords = np.asarray(rna.obsm["X_umap"])
     clusters = rna.obs["leiden"].astype(str).to_numpy()
@@ -132,42 +133,56 @@ def run(clustered, mudata, prefix, fmt, min_depth, page_size):
     coverage_df.to_csv(f"{prefix}.cluster-coverage.csv")
     fraction_df.to_csv(f"{prefix}.cluster-alt-fraction.csv")
 
-    def heatmap(frame, label, title):
-        fig, ax = grid(
-            aspect_ratio=1.4,
-            panel_size=max(6, min(14, len(sites) * 0.22)),
+    def heatmap(frame, label, title, row_idx=None, col_idx=None):
+        for_hm = frame.fillna(0.).values
+        if row_idx is not None:
+            for_hm = for_hm[row_idx]
+        if col_idx is not None:
+            for_hm = for_hm[:,col_idx]
+        hm = sns.clustermap(
+            for_hm,
+            metric="euclidean",
+            row_cluster=row_idx is None,
+            col_cluster=col_idx is None,
+            cbar_kws={"label": label},
+            cmap="cividis",
+            vmin=0., 
+            vmax=1.,
+            xticklabels=True,
+            yticklabels=True,
+            mask=~np.isnan(frame.values),
+            figsize=(
+                max(6, min(14, len(clusters) * .1)),
+                max(6, min(14, len(sites) * 4.)), 
+            ),
         )
+        hm.ax_heatmap.set_yticklabels(
+            hm.ax_heatmap.get_ymajorticklabels(), 
+            fontsize=2.,
+        )
+        hm.savefig(
+            f"{prefix}.{title}.png", 
+            dpi=300, 
+            bbox_inches="tight",
+        )
+        hm.savefig(
+            f"{prefix}.{title}.pdf", 
+            dpi=300, 
+            bbox_inches="tight",
+        )
+        return hm
 
-        image = ax.imshow(
-            frame.to_numpy(dtype=float),
-            aspect="auto", interpolation="nearest",
-            cmap="cividis", vmin=0, vmax=1,
-        )
-        fig.colorbar(image, ax=ax, label=label)
-        ax.set_xticks(range(len(frame.columns)))
-        ax.set_xticklabels(frame.columns, rotation=90)
-        ax.set_yticks(range(len(frame.index)))
-        ax.set_yticklabels(frame.index, fontsize=6)
-        ax.set(
-            xlabel="Leiden cluster", 
-            title=title,
-        )
-
-        saver(
-            fig=fig,
-            name=f"{prefix}.{title}",
-            df=frame.reset_index(),
-        )
-
-    heatmap(
-        coverage_df,
-        "Fraction of cells with callable coverage",
-        "cluster-coverage",
-    )
-    heatmap(
+    hm = heatmap(
         fraction_df,
         "Pooled ALT / (REF + ALT)",
-        "cluster-alt-fraction",
+        "Site ALT fraction by cluster",
+    )
+    heatmap(
+        coverage_df,
+        "Fraction callable",
+        "Site coverage by cluster",
+        row_idx=hm.dendrogram_row.reordered_ind,
+        col_idx=hm.dendrogram_col.reordered_ind,
     )
 
     # Each feature gets one coverage panel and one ALT-fraction panel.
@@ -179,7 +194,7 @@ def run(clustered, mudata, prefix, fmt, min_depth, page_size):
                 ncol=ncol,
                 nrow=int(np.ceil(len(page) / ncol)),
                 aspect_ratio=1.1,
-                panel_size=5.,
+                panel_size=3.75,
             )
 
             plot_data = pd.DataFrame({
@@ -214,7 +229,7 @@ def run(clustered, mudata, prefix, fmt, min_depth, page_size):
                         norm = Normalize(
                             vmin=0,
                             vmax=1 if kind == "fraction"
-                            else max(1, float(np.nanmax(colour[valid]))),
+                            else max(1, float(np.nanmax(values[valid]))),
                         )
                 color = values
 
@@ -223,31 +238,29 @@ def run(clustered, mudata, prefix, fmt, min_depth, page_size):
                 # Unmeasured or insufficiently covered cells.
                 ax.scatter(
                     *coords[~valid].T,
-                    s=1., 
+                    s=.5, 
                     c="lightgrey",
                     rasterized=True,
+                    zorder=-1,
                 )
 
                 if np.any(valid):
-                    points = ax.scatter(
+                    sc = ax.scatter(
                         *coords[valid].T,
                         c=color[valid],
                         cmap="cividis",
                         norm=norm,
-                        s=1.5,
+                        s=.5,
                         rasterized=True,
+                        zorder=1,
                     )
-                    fig.colorbar(points, ax=ax)
+                    fig.colorbar(sc, ax=ax)
 
                 ax.set(
                     title=str(site),
                     xlabel="UMAP 1",
                     ylabel="UMAP 2",
                 )
-                ax.set_aspect("equal")
-
-            for ax in fig.axes[len(page):]:
-                ax.axis("off")
 
             saver(
                 fig=fig,

@@ -371,18 +371,17 @@ def _cluster(args: Namespace) -> None:
 
     # Standard library-size normalisation for exploratory
     # dimensionality reduction.
+    adata.var["not_is_rRNA"] = (~adata.var["is_rRNA"])
     adata.X = adata.layers["counts"].copy()
-    sc.pp.normalize_total(adata, target_sum=10_000)
+    sc.pp.normalize_total(adata)
     sc.pp.log1p(adata)
 
     adata.uns["normalization"] = {
         "method": "normalize_total_log1p",
-        "target_sum": 10000,
         "raw_counts_layer": "counts",
     }
 
     print_err("Annotating highly variable genes...")
-    adata.var["not_is_rRNA"] = (~adata.var["is_rRNA"])
     try:
         sc.pp.highly_variable_genes(
             adata,
@@ -493,11 +492,10 @@ def _cluster(args: Namespace) -> None:
     for ax, col in zip(axes, colors_to_plot):
         colors = adata.obs[col]
         col_is_categorical = isinstance(colors, pd.Series) and colors.dtype in ("category", "object", "str")
-        use_log = (not col_is_categorical and np.any(colors > 0.) and col in log_colors)
+        use_log = (not col_is_categorical and np.all(colors > 0.) and col in log_colors)
         plotter = partial(
             ax.scatter,
             s=.5,
-            alpha=.7,
             plotnonfinite=True,
         )
         if col_is_categorical:
@@ -507,9 +505,9 @@ def _cluster(args: Namespace) -> None:
                     *adata[adata.obs[col].cat.codes == i].obsm['X_umap'].T,
                     label=i,
                 )
-            ax.legend(
+        ax.legend(
             loc='upper center',
-            bbox_to_anchor=(0.5, -0.2),
+            bbox_to_anchor=(.5, -.2),
             ncol=7,
         )
         if not col_is_categorical:
@@ -528,7 +526,11 @@ def _cluster(args: Namespace) -> None:
     _figsaver(
         fig=fig,
         name=f'{args.output}.umap',
-        df=pd.DataFrame(adata.obsm['X_umap'], columns=["UMAP_1", "UMAP_2"], index=adata.obs_names),
+        df=pd.DataFrame(
+            adata.obsm['X_umap'], 
+            columns=["UMAP_1", "UMAP_2"], 
+            index=adata.obs_names,
+        ),
     )
     print_err("Plotting heatmap of mean gene markers per cell cluster...")
     # Compute a dendrogram on a dense representation only (avoids pandas+csr bug)

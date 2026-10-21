@@ -7,6 +7,7 @@ from pathlib import Path
 
 import anndata as ad
 from carabiner.mpl import add_legend, grid, figsaver
+from functools import partial
 import mudata as mu
 import numpy as np
 import pandas as pd
@@ -28,19 +29,14 @@ def biotype_groups(adata):
     if "gene_biotype" not in adata.var:
         raise ValueError("Missing gene_biotype annotations")
 
-    biotype = (
-        adata.var["gene_biotype"]
-        .astype(str)
-        .fillna("")
-        .str.lower()
-    )
+    biotype = adata.var["gene_biotype"].str.casefold()
 
     trna = biotype.eq("trna")
     tmrna = biotype.isin(["tmrna", "transfer-messenger rna"])
     rrna = biotype.eq("rrna")
 
     other_ncrna = (
-        biotype.str.contains("ncrna|non_coding|non-coding|srna|antisense")
+        biotype.str.contains(("ncrna", "non_coding", "non-coding", "srna", "antisense"))
         | biotype.isin(["rna", "scrna", "snrna"])
     ) & ~(trna | tmrna | rrna)
 
@@ -74,62 +70,45 @@ def plot_grid(coords, frame, columns, filename, fmt, ncol=6):
         fig, axes = grid(
             ncol=min(ncol, len(page)),
             nrow=int(np.ceil(len(page) / ncol)),
-            aspect_ratio=1.1,
-            panel_size=5.,
+            aspect_ratio=1.,
+            panel_size=3.75,
         )
-        axes = np.asarray(axes).ravel()
 
-        for ax, column in zip(axes, page):
-            values = frame[column]
-            valid = values.notna().to_numpy()
-
-            ax.scatter(
-                coords[~valid, 0],
-                coords[~valid, 1],
-                c="lightgrey",
-                s=1.,
-                rasterized=True,
+        for ax, col in zip(fig.axes, page):
+            colors = frame[col]
+            valid = colors.notna().to_numpy()
+            col_is_categorical = (
+                isinstance(colors, pd.Series) 
+                and colors.dtype in ("category", "object", "str")
             )
-
-            if isinstance(values.dtype, pd.CategoricalDtype) or (
-                pd.api.types.is_object_dtype(values.dtype)
-                or pd.api.types.is_string_dtype(values.dtype)
-            ):
-                categories = values[valid].astype(str)
-                for category in sorted(categories.unique()):
-                    selected = (
-                        (values.astype(str) == category).to_numpy()
-                        & valid
-                    )
-                    ax.scatter(
-                        coords[selected, 0],
-                        coords[selected, 1],
-                        s=1.5,
-                        label=category,
-                        rasterized=True,
+            use_log = (not col_is_categorical and np.all(colors > 0.))
+            plotter = partial(
+                ax.scatter,
+                s=.5,
+                plotnonfinite=True,
+            )
+            if col_is_categorical:
+                colors = colors.astype("category")
+                for i in np.unique(colors.cat.codes):
+                    plotter(
+                        *coords[colors.cat.codes == i].T,
+                        label=i,
                     )
                 add_legend(ax)
-            else:
-                numeric = pd.to_numeric(values, errors="coerce")
-                scatter = ax.scatter(
-                    coords[valid, 0],
-                    coords[valid, 1],
-                    c=numeric.to_numpy()[valid],
+            if not col_is_categorical:
+                scatter = plotter(
+                    *coords.T,
+                    c=colors,
                     cmap="cividis",
-                    s=1.5,
-                    rasterized=True,
+                    norm="log" if use_log else None,
                 )
                 fig.colorbar(scatter, ax=ax)
 
             ax.set(
-                title=str(column),
+                title=f"{coords.shape[0]} cells" + '\n' + col,
                 xlabel="UMAP 1",
                 ylabel="UMAP 2",
             )
-            ax.set_aspect("equal")
-
-        for ax in axes[len(page):]:
-            ax.axis("off")
 
         saver(
             fig=fig,
@@ -212,7 +191,7 @@ def main():
     prefix.parent.mkdir(parents=True, exist_ok=True)
 
     coords = np.asarray(adata.obsm["X_umap"])
-    groups = biotype_groups(adata)
+    _biotype_groups = biotype_groups(adata)
 
     # Use sample-qualified observation IDs for multimodal joining.
     if "sample_id" not in adata.obs:
@@ -229,56 +208,63 @@ def main():
     else:
         mdata = None
 
-    obs_features = adata.obs.copy()
-
     general = [
         column for column in (
             "leiden", "total_counts", "n_genes_by_counts",
             "doublet_score", "predicted_doublet",
             "pct_counts_is_tRNA", "pct_counts_is_rRNA",
             "pct_counts_is_protein_coding", "tRNA_rRNA_ratio",
-        ) if column in obs_features
+        ) if column in adata.obs
     ]
 
     # Collect individual feature expression from log-normalised X.
     feature_expression = pd.DataFrame(index=adata.obs_names)
 
-    for group in groups.values():
-        for feature in group:
+    for feature_ids in _biotype_groups.values():
+        for feature in feature_ids:
             j = adata.var_names.get_loc(feature)
             feature_expression[feature_label(adata, feature)] = (
                 dense_column(adata.X, j)
             )
 
     if mdata is not None:
-        add_multimodal_features(adata, mdata, obs_features)
+        add_multimodal_features(adata, mdata, adata.obs)
 
     multi = [
         col for col in (
             "has_mod", "mod_callable_depth",
             "mod_alt_fraction", "has_end5",
             "end5_locus_counts", "end5_assigned_fraction",
-        ) if col in obs_features
+        ) if col in adata.obs
     ]
 
     plot_grid(
-        coords, obs_features, general,
-        f"{prefix}.general", args.plot_format,
+        coords, 
+        adata.obs, 
+        general,
+        f"{prefix}.general", 
+        args.plot_format,
     )
 
-    for name, feature_ids in groups.items():
+    for name, feature_ids in _biotype_groups.items():
         labels = [
             feature_label(adata, feature)
             for feature in feature_ids
         ]
         plot_grid(
-            coords, feature_expression, labels,
-            f"{prefix}.{name}", args.plot_format,
+            coords, 
+            feature_expression, 
+            labels,
+            f"{prefix}.{name}", 
+            args.plot_format,
         )
 
     plot_grid(
-        coords, obs_features, multi,
-        f"{prefix}.multimodal", args.plot_format,
+        coords, 
+        adata.obs, 
+        multi,
+        f"{prefix}.multimodal", 
+        args.plot_format,
     )
 
     print(
