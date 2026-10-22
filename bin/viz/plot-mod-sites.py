@@ -6,6 +6,7 @@ import argparse
 from pathlib import Path
 
 import anndata as ad
+from carabiner import print_err
 from carabiner.mpl import grid, figsaver
 from matplotlib.colors import Normalize
 import mudata as mu
@@ -123,6 +124,10 @@ def run(clustered, mudata, prefix, fmt, min_depth, page_size):
         coverage_rows.append(coverage_row)
         fraction_rows.append(fraction_row)
 
+    if not sites:
+        print_err("No modification sites detected; analysis completed.")
+        return None
+
     pd.DataFrame(summary).to_csv(
         f"{prefix}.sites.csv", index=False
     )
@@ -133,18 +138,30 @@ def run(clustered, mudata, prefix, fmt, min_depth, page_size):
     coverage_df.to_csv(f"{prefix}.cluster-coverage.csv")
     fraction_df.to_csv(f"{prefix}.cluster-alt-fraction.csv")
 
-    def heatmap(frame, label, title, row_idx=None, col_idx=None):
-        missing = frame.isna()
-        for_hm = frame.fillna(0.)
+
+    def heatmap(df, label, title, row_idx=None, col_idx=None):
         if row_idx is not None:
-            for_hm = for_hm.iloc[row_idx]
+            df = df.iloc[row_idx]
         if col_idx is not None:
-            for_hm = for_hm.iloc[:,col_idx]
+            df = df.iloc[:,col_idx]
+        missing = df.isna()
+        values = df.fillna(0.)
+        # Only cluster an axis containing distinguishable observations.
+        row_cluster = (
+            row_idx is None
+            and values.shape[0] > 1
+            and values.drop_duplicates().shape[0] > 1
+        )
+        col_cluster = (
+            col_idx is None
+            and values.shape[1] > 1
+            and values.T.drop_duplicates().shape[0] > 1
+        )
         hm = sns.clustermap(
-            for_hm,
-            metric="euclidean",
-            row_cluster=row_idx is None,
-            col_cluster=col_idx is None,
+            values,
+            metric="cosine",
+            row_cluster=row_cluster,
+            col_cluster=col_cluster,
             cbar_kws={"label": label},
             cmap="cividis",
             vmin=0., 
@@ -157,10 +174,7 @@ def run(clustered, mudata, prefix, fmt, min_depth, page_size):
                 max(6, min(14, for_hm.shape[0] * .25)),
             ),
         )
-        hm.ax_heatmap.set_yticklabels(
-            hm.ax_heatmap.get_ymajorticklabels(), 
-            fontsize=2.,
-        )
+        hm.ax_heatmap.tick_params(axis="y", labelsize=6)
         hm.savefig(
             f"{prefix}.{title}.png", 
             dpi=300, 
@@ -177,6 +191,16 @@ def run(clustered, mudata, prefix, fmt, min_depth, page_size):
         fraction_df,
         "Pooled ALT / (REF + ALT)",
         "Site ALT fraction by cluster",
+    )
+    row_order = (
+        hm.dendrogram_row.reordered_ind
+        if hm.dendrogram_row is not None
+        else None
+    )
+    col_order = (
+        hm.dendrogram_col.reordered_ind
+        if hm.dendrogram_col is not None
+        else None
     )
     heatmap(
         coverage_df,
@@ -275,7 +299,7 @@ def run(clustered, mudata, prefix, fmt, min_depth, page_size):
     umap_pages("coverage")
     umap_pages("fraction")
 
-    print(
+    print_err(
         f"Plotted {len(sites)} modification sites "
         f"across {len(names)} RNA-QC-passing cells"
     )

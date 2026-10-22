@@ -5,7 +5,7 @@ process build_AnnData {
    errorStrategy 'ignore'
 
    publishDir( 
-      "${params.outputs}/scanpy", 
+      "${params.outputs}/scanpy/build", 
       mode: 'copy',
       saveAs: { "${id}.${it}" },
    )
@@ -36,7 +36,7 @@ process filter_AnnData {
    label "med_mem"
 
    publishDir( 
-      "${params.outputs}/scanpy", 
+      "${params.outputs}/scanpy/filter", 
       mode: 'copy',
       saveAs: { "${id}.${it}" },
    )
@@ -76,7 +76,7 @@ process cluster_cells {
    // errorStrategy 'ignore'
 
    publishDir( 
-      "${params.outputs}/clustering", 
+      "${params.outputs}/scanpy/cluster", 
       mode: 'copy',
       saveAs: { "${id}.${it}" },
    )

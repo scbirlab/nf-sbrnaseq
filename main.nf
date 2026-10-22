@@ -484,7 +484,7 @@ workflow {
       mapped_reads.main,
       Channel.value( params.mapper ),
       Channel.value( params.min_mapq ),
-      Channel.value( !params.allow_multimap ),
+      Channel.value( params.disable_multimap ),
    )
    Prepend_Barcode(
       remove_multimappers.out,
@@ -601,7 +601,7 @@ workflow {
          Channel.value( params.mod_min_baseq ),
          Channel.value( params.mapper ),
          Channel.value( params.min_mapq ),
-         Channel.value( params.allow_multimap ),
+         Channel.value( !params.disable_multimap ),
       )
          | BuildModAnnData
 
