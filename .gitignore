@@ -7,3 +7,5 @@
 test/*/outputs/
 test/*/*/outputs/
 work/
+__pycache__/
+*.pyc

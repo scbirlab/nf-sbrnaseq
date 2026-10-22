@@ -628,15 +628,22 @@ workflow {
       .unique()
       | bam2wig
 
-   bam2wig.out
+   // Map genome-level BED files back to their samples.
+   genome_ch
+      .map { v -> v[1..0] }  // genome_acc, sample_id
       .combine( gff2bed.out, by: 0 )
+      .map { v -> v[1..2] }  // sample_id, bed
+      .set { sample_bed }
+
+   bam2wig.out
+      .combine( sample_bed, by: 0 )
       | plot_peaks
 
    collapsed
-      .map { tuple( it[0], it[1] ) }
+      .map { v -> v[0..1] }
       .unique()
       .combine( 
-         gff2bed.out,
+         sample_bed,
          by: 0,
       )
       | gene_body_coverage
