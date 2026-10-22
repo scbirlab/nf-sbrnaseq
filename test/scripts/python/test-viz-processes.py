@@ -17,9 +17,9 @@ from scipy.sparse import csr_matrix
 
 ROOT = next(
     p for p in Path(__file__).resolve().parents
-    if (p / "bin/anndata/embed-trna.py").exists()
+    if (p / "bin/viz/embed-trna.py").exists()
 )
-BIN = ROOT / "bin/anndata"
+BIN = ROOT / "bin/viz"
 
 
 def run(script, *args):

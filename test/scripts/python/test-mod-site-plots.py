@@ -16,7 +16,7 @@ from scipy.sparse import csr_matrix
 from test_utils.files import find_repo_root
 
 
-SCRIPT = find_repo_root(Path(__file__), "bin/anndata/plot-mod-sites.py")
+SCRIPT = find_repo_root(Path(__file__), "bin/viz/plot-mod-sites.py")
 
 with tempfile.TemporaryDirectory() as directory:
     tmp = Path(directory)

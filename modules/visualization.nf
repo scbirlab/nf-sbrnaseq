@@ -107,7 +107,7 @@ process PlotEnd5Usage {
     tag "${id}"
     label "med_mem"
 
-    publishDir("${params.outputs}/visualisation/end5",
+    publishDir("${params.outputs}/visualization/end5",
         mode: 'copy',
         saveAs: { "${id}.${it}" })
 

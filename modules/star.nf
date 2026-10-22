@@ -19,7 +19,6 @@ process STAR_index {
       --runThreadN ${task.cpus} \
       --genomeDir star-index \
       --genomeFastaFiles ${fasta} \
-      --genomeSAindexNbases 10 \
       --sjdbOverhang 99 \
       --sjdbGTFfile ${gff} \
       --sjdbGTFfeatureExon CDS \
@@ -75,10 +74,10 @@ process STAR_align {
       --alignIntronMax 1 \\
       --outFilterMultimapNmax ${max_multimaps} \\
       --outSAMmultNmax ${max_multimaps} \\
-      --outSAMprimaryFlag OneBestScore \\
+      --outSAMprimaryFlag AllBestScore \\
       --outSAMattributes NH HI NM MD AS nM \\
       --outSAMattrIHstart 0 \\
-      --outFilterScoreMinOverLread 0.4 --outFilterMatchNminOverLread 0.4 --outFilterMatchNmin 0 \\
+      --outFilterScoreMinOverLread 0 --outFilterMatchNminOverLread 0 --outFilterMatchNmin 0 \\
       --twopassMode None \\
       --quantMode GeneCounts \\
       --outWigType bedGraph read1_5p \\

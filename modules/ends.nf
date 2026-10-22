@@ -81,6 +81,7 @@ process ClusterMoleculeEnds {
             }
         }
     ' \\
+    | grep -v '^contig' \\
     | sort -k1,1 -k2,2 -k3,3n \\
     > paraclu-input.tsv
 
