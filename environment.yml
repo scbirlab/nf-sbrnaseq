@@ -10,6 +10,7 @@ dependencies:
     - bioconda::bedops
     - bioconda::bedtools
     - bioconda::bowtie2
+    - bioconda::eggnog-mapper>=2.1.13
     - bioconda::fastqc
     - bioconda::minimap2
     - bioconda::paraclu
