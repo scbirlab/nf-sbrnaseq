@@ -67,11 +67,6 @@ with tempfile.TemporaryDirectory() as directory:
         "contig", "strand", "pos1",
     ])
 
-    # Assignment requires locus_id, as emitted by filter-ends.py.
-    assignment_loci = loci.rename(
-        columns={"end5_locus_id": "locus_id"}
-    )
-
     raw_loci = tmp / "raw-loci.tsv"
     annotation = tmp / "annotated.tsv"
     end_file = tmp / "ends.tsv.gz"
@@ -79,7 +74,7 @@ with tempfile.TemporaryDirectory() as directory:
     qc_file = tmp / "assignment-qc.tsv"
     output = tmp / "end5.h5ad"
 
-    assignment_loci.to_csv(raw_loci, sep="\t", index=False)
+    loci.to_csv(raw_loci, sep="\t", index=False)
     loci.to_csv(annotation, sep="\t", index=False)
 
     with gzip.open(end_file, "wt") as handle:

@@ -45,8 +45,8 @@ process PlotModSites {
     tuple val( id ), path( clustered ), path( h5mu )
 
     output:
-    tuple val( id ), path( "modsites.*.png" ), emit: figures
-    tuple val( id ), path( "modsites.*.csv" ), emit: tables
+    tuple val( id ), path( "modsites.*.png" ), emit: figures, optional: true
+    tuple val( id ), path( "modsites.*.csv" ), emit: tables, optional: true
 
     script:
     """
