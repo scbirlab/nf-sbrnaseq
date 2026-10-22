@@ -170,8 +170,8 @@ def run(clustered, mudata, prefix, fmt, min_depth, page_size):
             yticklabels=True,
             mask=missing,
             figsize=(
-                max(6, min(14, for_hm.shape[1] * .5)),
-                max(6, min(14, for_hm.shape[0] * .25)),
+                max(6, min(14, values.shape[1] * .5)),
+                max(6, min(14, values.shape[0] * .25)),
             ),
         )
         hm.ax_heatmap.tick_params(axis="y", labelsize=6)
