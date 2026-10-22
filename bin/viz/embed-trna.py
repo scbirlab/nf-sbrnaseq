@@ -38,25 +38,64 @@ def main():
     
     adata_trna = rna[:, rna.var["is_tRNA"].astype(bool)].copy()
 
-    # Filter features using raw counts, not previously normalised X.
+    # Work from raw molecule counts.
     adata_trna.X = adata_trna.layers["counts"].copy()
-    sc.pp.filter_genes(
-        adata_trna,
-        min_cells=args.min_cells_per_gene,
-    )
 
-    if adata_trna.n_vars < 3:
-        raise ValueError("Fewer than three qualifying tRNAs")
+    if adata_trna.n_vars:
+        sc.pp.filter_genes(
+            adata_trna,
+            min_cells=args.min_cells_per_gene,
+        )
 
     depth = np.asarray(
         adata_trna.layers["counts"].sum(axis=1)
     ).ravel()
 
     observed = depth > 0
-    if observed.sum() < 5:
-        raise ValueError("Fewer than five tRNA-positive cells")
-
+    n_positive = int(observed.sum())
     n_excluded = int((~observed).sum())
+
+    n_pcs = min(
+        30,
+        n_positive - 1,
+        adata_trna.n_vars - 1,
+    )
+
+    reason = None
+    if adata_trna.n_vars < 3:
+        reason = "Fewer than three qualifying tRNAs"
+    elif n_positive < 5:
+        reason = "Fewer than five tRNA-positive cells"
+    elif n_pcs < 2:
+        reason = "Insufficient PCA dimensions"
+
+    status = "skipped" if reason else "completed"
+
+    pd.DataFrame([{
+        "status": status,
+        "reason": reason or "",
+        "n_cells_input": rna.n_obs,
+        "n_trna_features": adata_trna.n_vars,
+        "n_trna_positive_cells": n_positive,
+        "n_cells_excluded": n_excluded,
+    }]).to_csv(f"{args.output}.status.csv", index=False)
+
+    if reason:
+        print_err(f"Skipping tRNA embedding: {reason}")
+        adata_trna.uns["trna_embedding"] = {
+            "status": "skipped",
+            "reason": reason,
+            "n_cells_input": rna.n_obs,
+            "n_trna_features": adata_trna.n_vars,
+            "n_trna_positive_cells": n_positive,
+        }
+        save_anndata(
+            adata_trna,
+            args.output,
+            printf=print_err,
+        )
+        return
+
     adata_trna = adata_trna[observed, :].copy()
 
     # Clear inherited log-normalisation metadata.

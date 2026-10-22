@@ -13,7 +13,8 @@ import mudata as mu
 import numpy as np
 import pandas as pd
 from scipy.sparse import issparse
-import seaborn as sns
+
+from viz_utils import heatmap
 
 
 def vector(matrix, rows, column):
@@ -138,59 +139,11 @@ def run(clustered, mudata, prefix, fmt, min_depth, page_size):
     coverage_df.to_csv(f"{prefix}.cluster-coverage.csv")
     fraction_df.to_csv(f"{prefix}.cluster-alt-fraction.csv")
 
-
-    def heatmap(df, label, title, row_idx=None, col_idx=None):
-        if row_idx is not None:
-            df = df.iloc[row_idx]
-        if col_idx is not None:
-            df = df.iloc[:,col_idx]
-        missing = df.isna()
-        values = df.fillna(0.)
-        # Only cluster an axis containing distinguishable observations.
-        row_cluster = (
-            row_idx is None
-            and values.shape[0] > 1
-            and values.drop_duplicates().shape[0] > 1
-        )
-        col_cluster = (
-            col_idx is None
-            and values.shape[1] > 1
-            and values.T.drop_duplicates().shape[0] > 1
-        )
-        hm = sns.clustermap(
-            values,
-            metric="cosine",
-            row_cluster=row_cluster,
-            col_cluster=col_cluster,
-            cbar_kws={"label": label},
-            cmap="cividis",
-            vmin=0., 
-            vmax=1.,
-            xticklabels=True,
-            yticklabels=True,
-            mask=missing,
-            figsize=(
-                max(6, min(14, values.shape[1] * .5)),
-                max(6, min(14, values.shape[0] * .25)),
-            ),
-        )
-        hm.ax_heatmap.tick_params(axis="y", labelsize=6)
-        hm.savefig(
-            f"{prefix}.{title}.png", 
-            dpi=300, 
-            bbox_inches="tight",
-        )
-        hm.savefig(
-            f"{prefix}.{title}.pdf", 
-            dpi=300, 
-            bbox_inches="tight",
-        )
-        return hm
-
     hm = heatmap(
         fraction_df,
-        "Pooled ALT / (REF + ALT)",
-        "Site ALT fraction by cluster",
+        color_label="ALT / (REF + ALT)",
+        filename=f"{prefix}.site-alt-frac",
+        output_format=fmt,
     )
     row_order = (
         hm.dendrogram_row.reordered_ind
@@ -204,10 +157,11 @@ def run(clustered, mudata, prefix, fmt, min_depth, page_size):
     )
     heatmap(
         coverage_df,
-        "Fraction callable",
-        "Site coverage by cluster",
-        row_idx=hm.dendrogram_row.reordered_ind,
-        col_idx=hm.dendrogram_col.reordered_ind,
+        color_label="Fraction callable",
+        filename=f"{prefix}.site-coverage",
+        row_idx=row_order,
+        col_idx=col_order,
+        output_format=fmt,
     )
 
     # Each feature gets one coverage panel and one ALT-fraction panel.

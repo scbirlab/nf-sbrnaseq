@@ -83,8 +83,9 @@ process EmbedTRNA {
 
     output:
     tuple val( id ), path( "trna.h5ad" ), emit: anndata
-    tuple val( id ), path( "trna.*.png" ), emit: figures
-    tuple val( id ), path( "trna.*.csv" ), emit: tables
+    tuple val( id ), path( "trna.status.csv" ), emit: status
+    tuple val( id ), path( "trna.umap.png" ), emit: figures, optional: true
+    tuple val( id ), path( "trna.umap.csv" ), emit: tables, optional: true
 
     script:
     """
@@ -115,8 +116,10 @@ process PlotEnd5Usage {
     tuple val( id ), path( clustered ), path( h5mu )
 
     output:
-    tuple val( id ), path( "end5.*.png" ), emit: figures
-    tuple val( id ), path( "end5.*.csv" ), emit: tables
+    tuple val( id ), path( "end5.status.csv" ), emit: status
+    tuple val( id) , path( "end5.annotations.csv" ), emit: annotations
+    tuple val( id ), path( "end5.*.png" ), emit: figures, optional: true
+    tuple val( id ), path( "end5.*.csv" ), emit: tables, optional: true
 
     script:
     """
@@ -163,6 +166,7 @@ process PlotGeneCorrelations {
 
     python ${projectDir}/bin/viz/plot-gene-correlations.py \\
         --clustered "${clustered}" \\
+        --min-cells-per-gene ${params.min_cells_per_gene} \\
         --output correlations
     """
 }

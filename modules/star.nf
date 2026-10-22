@@ -77,7 +77,7 @@ process STAR_align {
       --outSAMprimaryFlag AllBestScore \\
       --outSAMattributes NH HI NM MD AS nM \\
       --outSAMattrIHstart 0 \\
-      --outFilterScoreMinOverLread 0 --outFilterMatchNminOverLread 0 --outFilterMatchNmin 0 \\
+      --outFilterScoreMinOverLread 0.1 --outFilterMatchNminOverLread 0.1 --outFilterMatchNmin 0 \\
       --twopassMode None \\
       --quantMode GeneCounts \\
       --outWigType bedGraph read1_5p \\

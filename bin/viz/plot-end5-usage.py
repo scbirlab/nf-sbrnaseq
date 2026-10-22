@@ -11,8 +11,8 @@ import mudata as mu
 import numpy as np
 import pandas as pd
 from scipy.sparse import issparse
-import seaborn as sns
 
+from viz_utils import heatmap
 
 def column(matrix, j):
     x = matrix[:, j]
@@ -51,8 +51,32 @@ def main():
     present = mdata_end5.obs["present_in_modality"].astype(bool).values[indices]
     eligible = present & (depth >= args.min_ends)
 
-    if not eligible.any() or mdata_end5.n_vars == 0:
-        raise ValueError("No sufficiently covered 5'-end data")
+    # Always preserve locus annotations, even when plotting is skipped.
+    mdata_end5.var.to_csv(f"{args.output}.annotations.csv")
+
+    reason = None
+    if mdata_end5.n_vars == 0:
+        reason = "No 5'-end loci detected"
+    elif not eligible.any():
+        reason = (
+            f"No cells with at least {args.min_ends} "
+            "assigned 5'-end molecules"
+        )
+
+    pd.DataFrame([{
+        "status": "skipped" if reason else "completed",
+        "reason": reason or "",
+        "n_rna_cells": rna.n_obs,
+        "n_loci": mdata_end5.n_vars,
+        "n_cells_present": int(present.sum()),
+        "n_cells_eligible": int(eligible.sum()),
+        "total_assigned_ends": int(depth.sum()),
+        "min_ends": args.min_ends,
+    }]).to_csv(f"{args.output}.status.csv", index=False)
+
+    if reason:
+        print_err(f"Skipping 5'-end visualisation: {reason}")
+        return None
 
     clusters = rna.obs["leiden"].astype(str).to_numpy()
     labels = sorted(np.unique(clusters))
@@ -85,48 +109,12 @@ def main():
 
     # Preserve the full locus annotation table.
     mdata_end5.var.to_csv(f"{args.output}.annotations.csv")
-
-    def heatmap(frame, label, title, row_idx=None, col_idx=None):
-        for_hm = frame.copy()
-        if row_idx is not None:
-            for_hm = for_hm.iloc[row_idx]
-        if col_idx is not None:
-            for_hm = for_hm.iloc[:, col_idx]
-
-        missing = for_hm.isna()
-        hm = sns.clustermap(
-            for_hm.fillna(0.),
-            metric="cosine",
-            row_cluster=row_idx is None and len(for_hm) > 1,
-            col_cluster=col_idx is None and len(for_hm.columns) > 1,
-            cbar_kws={"label": label},
-            cmap="cividis",
-            vmin=0.,
-            vmax=1.,
-            xticklabels=True,
-            yticklabels=True,
-            mask=missing.to_numpy(),
-            figsize=(
-                max(6, min(14, for_hm.shape[1] * .4)),
-                max(6, min(14, for_hm.shape[0] * .2)),
-            ),
-        )
-        hm.ax_heatmap.set_yticklabels(
-            hm.ax_heatmap.get_ymajorticklabels(), 
-            fontsize=2.,
-        )
-        hm.savefig(
-            f"{args.output}.{title}.{args.plot_format}", 
-            dpi=300, 
-            bbox_inches="tight",
-        )
-        return hm
-
     
     heatmap(
         usage,
-        "Fraction of assigned ends",
-        "Relative 5-end locus usage",
+        color_label="Fraction of assigned ends",
+        filename=f"{args.output}.end5-locus-usage",
+        output_format=args.plot_format,
     )
 
     saver = figsaver(format=args.plot_format)

@@ -90,6 +90,10 @@ def plot_grid(coords, frame, columns, filename, fmt, ncol=6):
                 s=.5,
                 plotnonfinite=True,
             )
+            plotter(
+                *coords.T,
+                color="lightgrey",
+            )
             if col_is_categorical:
                 colors = colors.astype("category")
                 unique_cats = np.unique(colors)
@@ -99,7 +103,7 @@ def plot_grid(coords, frame, columns, filename, fmt, ncol=6):
                         plotter(
                             *coords[colors.cat.codes == i].T,
                             label=i,
-                            color="lightgrey",
+                            color="dimgrey",
                         )
                     plotter(
                         *coords[colors.cat.codes == i].T,

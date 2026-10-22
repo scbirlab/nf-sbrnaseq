@@ -525,7 +525,7 @@ workflow {
 
       ExtractMoleculeEnds(
          DeduplicateMolecules.out,
-         Channel.value( params.end5_read ),
+         Channel.value( params.nanopore || params.unpaired ? 0 : params.end5_read ),
          Channel.value( params.end5_boundary ),
          Channel.value( params.strand ),
          Channel.value( params.min_mapq ),
