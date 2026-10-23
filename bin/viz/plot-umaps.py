@@ -50,11 +50,13 @@ def biotype_groups(adata):
 
 
 def feature_label(adata, feature):
-    row = adata.var.loc[feature]
-    label = str(row.get("Name", ""))
-    if label and label.lower() != "nan" and label != feature:
+    label = str(adata.var.loc[feature].get("Name", "")).strip()
+    label = " ".join(label.split())
+    feature = str(feature).strip()
+
+    if label and label.lower() not in {"nan", "none"} and label != feature:
         return f"{label}\n{feature}"
-    return str(feature)
+    return feature
 
 
 def plot_grid(coords, frame, columns, filename, fmt, ncol=6):

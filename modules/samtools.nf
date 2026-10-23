@@ -130,7 +130,7 @@ process remove_multimappers {
     samtools view \\
         -@ ${task.cpus} \\
         -b \\
-        -F 2308 \\
+        -F ${require_unique ? '2308' : '260'} \\
         -q ${min_mapq} ${unique} \\
         "${bamfile}" \\
     | samtools sort \\

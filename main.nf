@@ -80,6 +80,7 @@ include {
    gene_body_coverage;  
    gff2bed; 
 } from './modules/rseqc.nf'
+include { EmapperGeneTable } from './modules/functional-annotation.nf'
 include { ResolveSites } from './modules/sites.nf'
 include { 
    STAR_index; 
@@ -720,15 +721,31 @@ workflow {
    cluster_cells.out.anndata
       | EmbedTRNA
 
-   genome_ch
-      .map { sample_id, accession -> tuple(accession, sample_id) }
-      .join( EggnogFunctionalSets.out.gff, by: 0 )
-      .map { accession, sample_id, gff -> tuple(sample_id, gff) }
-      .set { sample_functional_gff }
+   
+    // Match eggNOG annotations to genes using original NCBI GFF.
+    fetch_genome_from_NCBI.out.nucleotides
+        .map { accession, fasta, gff ->
+            tuple(accession, gff)
+        }
+        .join(EggnogFunctionalSets.out.table, by: 0)
+        | EmapperGeneTable
 
-   cluster_cells.out.anndata
-      .join( sample_functional_gff, by: 0 )
-      | PlotGeneCorrelations
+    // Share genome-level annotation tables across samples.
+    genome_ch
+        .map { sample_id, accession ->
+            tuple(accession, sample_id)
+        }
+        .join(EmapperGeneTable.out.table, by: 0)
+        .map { accession, sample_id, table ->
+            tuple(sample_id, table)
+        }
+        .set { sample_functional_table }
+
+    // Existing visualisation interface remains unchanged.
+    cluster_cells.out.anndata
+        .join(sample_functional_table, by: 0)
+        | PlotGeneCorrelations
+
 
    multimodal_umap_inputs = cluster_cells.out.anndata
       .join( BuildMuData.out, by: 0 )

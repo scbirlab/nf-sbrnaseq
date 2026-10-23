@@ -150,7 +150,7 @@ process PlotGeneCorrelations {
     )
 
     input:
-    tuple val( id ), path( clustered )
+    tuple val( id ), path( clustered ), path( ann )
 
     output:
     tuple val( id ), path( "correlations.*.png" ), emit: figures
@@ -167,6 +167,7 @@ process PlotGeneCorrelations {
     python ${projectDir}/bin/viz/plot-gene-correlations.py \\
         --clustered "${clustered}" \\
         --min-cells-per-gene ${params.min_cells_per_gene} \\
+        --annotations "${ann}" \\
         --output correlations
     """
 }
