@@ -73,7 +73,7 @@ process EmbedTRNA {
     label "med_mem"
 
     publishDir(
-        "${params.outputs}/visualisation/trna",
+        "${params.outputs}/visualization/trna",
         mode: 'copy',
         saveAs: { "${id}.${it}" },
     )

@@ -36,6 +36,10 @@ include {
    plot_peaks;
 } from './modules/deeptools.nf'
 include {
+    DownloadEggnogDBs;
+    EggnogFunctionalSets;
+} from './modules/eggnog.nf'
+include {
    ExtractMoleculeEnds;
    ClusterMoleculeEnds;
    AnnotateEndLoci;
@@ -308,10 +312,24 @@ workflow {
       .map { v -> v[1] }  // genome_acc
       .unique()
       | fetch_genome_from_NCBI   // genome_acc, genome, gff
+   
+   // if ( params.use_eggnog ) {
+      Channel.value( params.eggnog_url )
+         | DownloadEggnogDBs
+
+      fetch_genome_from_NCBI.out.proteins
+         .join(
+            fetch_genome_from_NCBI.out.nucleotides
+               .map { acc, genome, gff -> tuple(acc, gff) },
+            by: 0,
+         )
+         .combine(DownloadEggnogDBs.out)
+         | EggnogFunctionalSets
+   // }
 
    genome_ch
       .map { v -> v[1..0] }  // genome_acc, sample_id
-      .combine( fetch_genome_from_NCBI.out, by: 0 )  // genome_acc, sample_id, genome, gff
+      .combine( fetch_genome_from_NCBI.out.nucleotides, by: 0 )  // genome_acc, sample_id, genome, gff
       .tap { pre_site_ref }
       .map { v -> tuple( v[1], v[-1] ) }  // sample_id, gff
       .unique()
@@ -401,14 +419,14 @@ workflow {
       | set { extracted }
 
    if ( params.mapper == "star" ) {
-      fetch_genome_from_NCBI.out
+      fetch_genome_from_NCBI.out.nucleotides
          | STAR_index 
          | set { genome_idx0 }
    }
 
    else if ( params.mapper == "bowtie2" ) {
 
-      fetch_genome_from_NCBI.out
+      fetch_genome_from_NCBI.out.nucleotides
          .map { it[0..1] } 
          .unique()
          | bowtie2_index
@@ -419,7 +437,7 @@ workflow {
    else if ( params.mapper == "minimap2" ) {
 
       minimap_index(
-         fetch_genome_from_NCBI.out
+         fetch_genome_from_NCBI.out.nucleotides
             .map { it[0..1] }
             .unique(),
          Channel.value( params.nanopore ),
@@ -515,7 +533,7 @@ workflow {
          & DeduplicateMolecules
       )
 
-   fetch_genome_from_NCBI.out
+   fetch_genome_from_NCBI.out.nucleotides
       .map { v -> tuple( v[0], v[2] ) }
       .unique()
       .tap { gff_ch }
@@ -605,8 +623,8 @@ workflow {
       )
          | BuildModAnnData
 
-
    }
+
    SAMtools_stats.out | plot_bamstats
 
    Concat_UMIcollapse.out.main
@@ -699,14 +717,21 @@ workflow {
       | QCMuData
 
    // RNA-only analyses run independently of MuData.
-   cluster_cells.out.anndata 
-      | (
-         EmbedTRNA 
-         & PlotGeneCorrelations
-      )
+   cluster_cells.out.anndata
+      | EmbedTRNA
+
+   genome_ch
+      .map { sample_id, accession -> tuple(accession, sample_id) }
+      .join( EggnogFunctionalSets.out.gff, by: 0 )
+      .map { accession, sample_id, gff -> tuple(sample_id, gff) }
+      .set { sample_functional_gff }
+
+   cluster_cells.out.anndata
+      .join( sample_functional_gff, by: 0 )
+      | PlotGeneCorrelations
 
    multimodal_umap_inputs = cluster_cells.out.anndata
-      .join(BuildMuData.out, by: 0)
+      .join( BuildMuData.out, by: 0 )
 
    multimodal_umap_inputs 
       | PlotRNAUMAPs

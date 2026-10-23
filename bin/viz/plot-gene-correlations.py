@@ -72,13 +72,13 @@ def main():
             yticklabels=True,
             dendrogram_ratio=(0., .1),
             figsize=(
-                max(6, min(14, corr.shape[1] * .1)),
-                max(6, min(14, corr.shape[0] * .1)), 
+                max(6, min(28, corr.shape[1] * .1)),
+                max(6, min(28, corr.shape[0] * .1)), 
             ),
         )
         hm.ax_heatmap.set_yticklabels(
             hm.ax_heatmap.get_ymajorticklabels(), 
-            fontsize=10.,
+            fontsize=5.,
         )
         hm.savefig(
             f"{args.output}.heatmap.{args.plot_format}", 

@@ -53,7 +53,7 @@ def feature_label(adata, feature):
     row = adata.var.loc[feature]
     label = str(row.get("Name", ""))
     if label and label.lower() != "nan" and label != feature:
-        return f"{label}\t{feature}"
+        return f"{label}\n{feature}"
     return str(feature)
 
 
@@ -105,10 +105,11 @@ def plot_grid(coords, frame, columns, filename, fmt, ncol=6):
                             label=i,
                             color="dimgrey",
                         )
-                    plotter(
-                        *coords[colors.cat.codes == i].T,
-                        label=i,
-                    )
+                    else:
+                        plotter(
+                            *coords[colors.cat.codes == i].T,
+                            label=i,
+                        )
                 add_legend(ax)
             if not col_is_categorical:
                 mask = np.isfinite(colors)
@@ -237,12 +238,11 @@ def main():
 
     # Collect individual feature expression from log-normalised X.
     feature_expression = pd.DataFrame(index=adata.obs_names)
-
     for feature_ids in _biotype_groups.values():
         for feature in feature_ids:
             j = adata.var_names.get_loc(feature)
             feature_expression[feature_label(adata, feature)] = (
-                dense_column(adata.X, j)
+                dense_column(adata.layers["counts"], j)
             )
 
     if mdata is not None:
