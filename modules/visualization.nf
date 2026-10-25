@@ -33,7 +33,7 @@ process PlotRNAUMAPs {
 
 process PlotModSites {
     tag "${id}"
-    label "some_mem"
+    label "med_mem"
 
     publishDir(
         "${params.outputs}/visualization/modifications",

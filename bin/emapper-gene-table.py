@@ -1,6 +1,6 @@
 
 #!/usr/bin/env python3
-"""Map eggNOG-mapper annotations onto NCBI GFF gene IDs."""
+"""Map eggNOG annotations onto featureCounts/AnnData gene IDs."""
 
 import argparse
 import csv
@@ -11,18 +11,62 @@ from bioino import GffFile
 from carabiner import print_err
 
 
+# Must match anndata-utils.py and featurecounts.nf.
+GENE_ID = ("genome_accession", "assembly", "chr", "gene_id")
+ANNOTATIONS = ("COG_category", "EC", "KEGG_Pathway")
 FIELDS = (
-    "contig", "gene_id", "locus_tag",
-    "COG_category", "EC", "KEGG_Pathway",
+    *GENE_ID, "contig", "gff_gene_id", "locus_tag",
+    *ANNOTATIONS,
 )
 
-ANNOTATIONS = ("COG_category", "EC", "KEGG_Pathway")
+
+def reference_metadata(gff):
+    """Associate each GFF contig with its NCBI assembly metadata.
+
+    NCBI GFF3 uses:
+      #!genome-build ASM584v2
+      #!genome-build-accession NCBI_Assembly:GCF_000005845.2
+
+    Metadata may change within concatenated GFF files.
+    """
+    metadata = {}
+    assembly = None
+    accession = None
+
+    with open(gff) as handle:
+        for line in handle:
+            if line.startswith("#!genome-build "):
+                assembly = line.split(None, 1)[1].strip()
+
+            elif line.startswith("#!genome-build-accession "):
+                value = line.split(None, 1)[1].strip()
+                accession = value.split(":", 1)[-1]
+
+            elif line and not line.startswith("#"):
+                seqid = line.split("\t", 1)[0]
+
+                if not assembly or not accession:
+                    raise ValueError(
+                        f"Missing NCBI assembly metadata for {seqid}"
+                    )
+
+                key = (accession, assembly)
+
+                if seqid in metadata and metadata[seqid] != key:
+                    raise ValueError(
+                        f"Contig {seqid} belongs to multiple assemblies"
+                    )
+
+                metadata[seqid] = key
+
+    return metadata
 
 
 def read_emapper(path):
-    """Read emapper annotations with their commented header."""
+    """Read the commented eggNOG-mapper annotation table."""
     with open(path) as handle:
         header = None
+
         for line in handle:
             if line.startswith("#query\t"):
                 header = line[1:].rstrip("\n").split("\t")
@@ -38,8 +82,10 @@ def read_emapper(path):
             )
 
         reader = csv.DictReader(
-            (line for line in handle
-             if line.strip() and not line.startswith("#")),
+            (
+                line for line in handle
+                if line.strip() and not line.startswith("#")
+            ),
             fieldnames=header,
             delimiter="\t",
         )
@@ -47,54 +93,92 @@ def read_emapper(path):
         result = {}
         for row in reader:
             query = row["query"]
+
             if query in result:
-                print_err(f"Duplicate emapper query: {query}")
+                raise ValueError(
+                    f"Duplicate emapper protein query: {query}"
+                )
+
             result[query] = row
 
-        return result
+    return result
+
+
+def parse_terms(value, field):
+    """Parse multi-valued eggNOG functional annotations."""
+    if not value or value in ("-", "."):
+        return set()
+
+    if field == "COG_category":
+        return set(value.strip())
+
+    terms = {
+        term.strip() for term in value.split(",")
+        if term.strip() and term.strip() != "-"
+    }
+
+    if field == "KEGG_Pathway":
+        # Normalise equivalent map00260 and ko00260 entries.
+        terms = {
+            "ko" + term[3:] if term.startswith("map") else term
+            for term in terms
+        }
+
+    return terms
 
 
 def gene_table(gff, annotations):
-    """Resolve protein -> CDS -> parent gene relationships."""
-    records = list(GffFile.from_file(str(gff)).as_dict())
+    """Join protein-level annotations to locus-tag-labelled genes."""
+    contig_metadata = reference_metadata(gff)
 
-    nodes = {}
-    parents = {}
     genes = {}
+    parents = defaultdict(set)
     proteins = defaultdict(set)
 
-    for row in records:
+    for row in GffFile.from_file(str(gff)).as_dict():
         seqid = row["seqid"]
+        feature = row["feature"]
         identifier = row.get("ID", "")
+        parent_ids = [
+            p for p in row.get("Parent", "").split(",") if p
+        ]
 
         if identifier:
             key = (seqid, identifier)
-            if key in nodes:
-                print_err(f"Duplicate feature ID: {key}")
-            nodes[key] = row
-            parents[key] = [
-                (seqid, p)
-                for p in row.get("Parent", "").split(",") if p
-            ]
+            parents[key].update(
+                (seqid, p) for p in parent_ids
+            )
 
-        if row["feature"] == "gene":
+        if feature == "gene":
             if not identifier:
-                raise ValueError("Gene without ID")
-            genes[(seqid, identifier)] = row
+                raise ValueError(
+                    f"Gene without GFF ID on {seqid}"
+                )
 
-        if row["feature"] == "CDS":
+            key = (seqid, identifier)
+            if key in genes:
+                raise ValueError(
+                    f"Duplicate gene feature: {key}"
+                )
+            genes[key] = row
+
+        elif feature == "CDS":
             protein = row.get("protein_id", "")
-            if protein and identifier:
-                proteins[protein].add((seqid, identifier))
 
-    def ancestor_genes(node):
-        """Find all ancestral gene nodes."""
-        stack = [node]
-        visited = set()
+            if protein:
+                # Begin traversal at the CDS's parent.
+                # CDS identifiers themselves are unnecessary.
+                proteins[protein].update(
+                    (seqid, p) for p in parent_ids
+                )
+
+    def ancestor_genes(start):
         found = set()
+        visited = set()
+        pending = list(start)
 
-        while stack:
-            key = stack.pop()
+        while pending:
+            key = pending.pop()
 
             if key in visited:
                 continue
@@ -103,55 +187,65 @@ def gene_table(gff, annotations):
             if key in genes:
                 found.add(key)
 
-            stack.extend(parents.get(key, []))
+            pending.extend(parents.get(key, ()))
 
         return found
 
     memberships = defaultdict(
-        lambda: {key: set() for key in ANNOTATIONS}
+        lambda: {
+            field: set() for field in ANNOTATIONS
+        }
     )
 
-    for protein, cds_nodes in proteins.items():
+    matched_proteins = set()
+    unmatched_proteins = set()
+
+    for protein, start_nodes in proteins.items():
         if protein not in annotations:
+            unmatched_proteins.add(protein)
             continue
 
-        targets = set()
-        for cds in cds_nodes:
-            targets.update(ancestor_genes(cds))
+        targets = ancestor_genes(start_nodes)
 
-        if len(targets) != 1:
+        if not targets:
             raise ValueError(
-                f"Protein {protein} maps to {len(targets)} genes"
+                f"Cannot resolve gene for protein {protein}"
             )
 
-        gene = next(iter(targets))
-        row = annotations[protein]
+        matched_proteins.add(protein)
+        record = annotations[protein]
 
-        for field in ANNOTATIONS:
-            value = row.get(field, "")
-            if value in ("", "-", "."):
-                continue
-
-            if field == "COG_category":
-                terms = set(value.strip())
-            else:
-                terms = set(value.split(","))
-
-            if field == "KEGG_Pathway":
-                # 'map' and 'ko' entries duplicate pathway IDs.
-                terms = {
-                    t for t in terms if t.startswith("ko")
-                }
-
-            memberships[gene][field].update(terms)
+        # A protein accession may annotate multiple identical
+        # proteins; preserve all unambiguous parent relationships.
+        for gene_key in targets:
+            for field in ANNOTATIONS:
+                memberships[gene_key][field].update(
+                    parse_terms(record.get(field, ""), field)
+                )
 
     output = []
-    for key, row in sorted(genes.items()):
-        values = memberships[key]
+    skipped = 0
+
+    for (seqid, gff_id), row in sorted(genes.items()):
+        locus_tag = row.get("locus_tag", "")
+
+        # featureCounts uses -g locus_tag. Genes without
+        # locus_tag cannot be represented by that convention.
+        if not locus_tag:
+            skipped += 1
+            continue
+
+        accession, assembly = contig_metadata[seqid]
+        values = memberships[(seqid, gff_id)]
+
         output.append({
-            "contig": key[0],
-            "gene_id": key[1],
-            "locus_tag": row.get("locus_tag", ""),
+            "genome_accession": accession,
+            "assembly": assembly,
+            "chr": seqid,
+            "gene_id": locus_tag,
+            "contig": seqid,
+            "gff_gene_id": gff_id,
+            "locus_tag": locus_tag,
             "COG_category": "".join(
                 sorted(values["COG_category"])
             ),
@@ -160,6 +254,27 @@ def gene_table(gff, annotations):
                 sorted(values["KEGG_Pathway"])
             ),
         })
+
+    keys = [
+        tuple(row[field] for field in GENE_ID)
+        for row in output
+    ]
+
+    if len(keys) != len(set(keys)):
+        raise ValueError(
+            "Duplicate composite gene IDs after locus_tag mapping"
+        )
+
+    print_err(
+        f"GFF genes: {len(genes)}; "
+        f"with locus_tag: {len(output)}; "
+        f"skipped: {skipped}"
+    )
+    print_err(
+        f"Matched eggNOG proteins: {len(matched_proteins)}; "
+        f"GFF proteins without eggNOG hit: "
+        f"{len(unmatched_proteins)}"
+    )
 
     return output
 
@@ -175,7 +290,7 @@ def main():
     rows = gene_table(args.gff, annotations)
 
     if not rows:
-        raise ValueError("No genes found")
+        raise ValueError("No locus-tag-labelled genes found")
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
 
@@ -188,7 +303,10 @@ def main():
 
     for field in ANNOTATIONS:
         n = sum(bool(row[field]) for row in rows)
-        print(f"{field}: {n}/{len(rows)} genes ({n/len(rows):.1%})")
+        print_err(
+            f"{field}: {n}/{len(rows)} genes "
+            f"({n / len(rows):.1%})"
+        )
 
 
 if __name__ == "__main__":

@@ -71,7 +71,7 @@ process filter_AnnData {
 process cluster_cells {
 
    tag "${id}"
-   label "med_mem"
+   label "big_mem"
 
    // errorStrategy 'ignore'
 

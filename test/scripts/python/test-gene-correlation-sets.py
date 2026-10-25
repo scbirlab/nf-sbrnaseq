@@ -1,5 +1,5 @@
 
-#!/usr/bin/env python3
+#!/usr/bin/env python
 """Synthetic regression test for three annotation heatmaps."""
 
 import subprocess

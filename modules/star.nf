@@ -74,7 +74,7 @@ process STAR_align {
       --alignIntronMax 1 \\
       --outFilterMultimapNmax ${max_multimaps} \\
       --outSAMmultNmax ${max_multimaps} \\
-      --outSAMprimaryFlag AllBestScore \\
+      --outSAMprimaryFlag OneBestScore \\
       --outSAMattributes NH HI NM MD AS nM \\
       --outSAMattrIHstart 0 \\
       --outFilterScoreMinOverLread 0.1 --outFilterMatchNminOverLread 0.1 --outFilterMatchNmin 0 \\

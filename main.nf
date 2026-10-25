@@ -288,7 +288,7 @@ workflow {
       csv_ch
          .map { tuple( 
             it.sample_id,
-            file( 
+            files( 
                "${params.fastq_dir}/*${it.fastq_pattern}*",
                checkIfExists: true
             ).sort()
@@ -319,7 +319,7 @@ workflow {
          | DownloadEggnogDBs
 
       fetch_genome_from_NCBI.out.proteins
-         .join(
+         .combine(
             fetch_genome_from_NCBI.out.nucleotides
                .map { acc, genome, gff -> tuple(acc, gff) },
             by: 0,
@@ -700,7 +700,7 @@ workflow {
 
    // Collect available modalities and RNA-QC membership by sample.
    build_AnnData.out.main
-      .join(filter_AnnData.out.main, by: 0)
+      .combine( filter_AnnData.out.main, by: 0 )
       .combine(
          (params.end5_enabled
             ? BuildEnd5AnnData.out
@@ -727,7 +727,7 @@ workflow {
         .map { accession, fasta, gff ->
             tuple(accession, gff)
         }
-        .join(EggnogFunctionalSets.out.table, by: 0)
+        .combine( EggnogFunctionalSets.out.table, by: 0 )
         | EmapperGeneTable
 
     // Share genome-level annotation tables across samples.
@@ -735,7 +735,7 @@ workflow {
         .map { sample_id, accession ->
             tuple(accession, sample_id)
         }
-        .join(EmapperGeneTable.out.table, by: 0)
+        .combine( EmapperGeneTable.out.table, by: 0 )
         .map { accession, sample_id, table ->
             tuple(sample_id, table)
         }
@@ -743,12 +743,12 @@ workflow {
 
     // Existing visualisation interface remains unchanged.
     cluster_cells.out.anndata
-        .join(sample_functional_table, by: 0)
+        .join( sample_functional_table, by: 0 )
         | PlotGeneCorrelations
 
 
    multimodal_umap_inputs = cluster_cells.out.anndata
-      .join( BuildMuData.out, by: 0 )
+      .combine( BuildMuData.out, by: 0 )
 
    multimodal_umap_inputs 
       | PlotRNAUMAPs
