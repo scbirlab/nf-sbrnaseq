@@ -10,7 +10,6 @@ dependencies:
     - bioconda::bedops
     - bioconda::bedtools
     - bioconda::bowtie2
-    - bioconda::eggnog-mapper>=2.1.13
     - bioconda::fastqc
     - bioconda::minimap2
     - bioconda::paraclu
@@ -37,6 +36,7 @@ dependencies:
         - 'carabiner-tools[mpl,pd]>=0.0.5.post3'
         - 'cutadapt>=5.0'
         - 'deeptools==3.5.6'
+        - eggnog-mapper
         - mudata
         - 'multiqc>=1.27'
         - 'numpy>=2.1.3'
