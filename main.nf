@@ -314,9 +314,26 @@ workflow {
       .unique()
       | fetch_genome_from_NCBI   // genome_acc, genome, gff
    
-   // if ( params.use_eggnog ) {
-      Channel.value( params.eggnog_url )
-         | DownloadEggnogDBs
+   if ( params.use_eggnog || params.eggnogdb ) {
+
+      if ( params.eggnogdb ) {
+
+         Channel.value( 
+            file( 
+               "${params.eggnogdb}", 
+               checkIfExists: true,
+            )
+         )
+         .set { eggnogdb }
+
+      }
+      else {
+
+         Channel.value( params.eggnog_url )
+            | DownloadEggnogDBs
+            | set { eggnogdb }
+
+      }
 
       fetch_genome_from_NCBI.out.proteins
          .combine(
@@ -324,9 +341,9 @@ workflow {
                .map { acc, genome, gff -> tuple(acc, gff) },
             by: 0,
          )
-         .combine(DownloadEggnogDBs.out)
+         .combine( eggnogdb )
          | EggnogFunctionalSets
-   // }
+   }
 
    genome_ch
       .map { v -> v[1..0] }  // genome_acc, sample_id
@@ -745,7 +762,6 @@ workflow {
     cluster_cells.out.anndata
         .join( sample_functional_table, by: 0 )
         | PlotGeneCorrelations
-
 
    multimodal_umap_inputs = cluster_cells.out.anndata
       .combine( BuildMuData.out, by: 0 )

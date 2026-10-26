@@ -13,12 +13,26 @@ from carabiner import print_err
 
 # Must match anndata-utils.py and featurecounts.nf.
 GENE_ID = ("genome_accession", "assembly", "chr", "gene_id")
-ANNOTATIONS = ("COG_category", "EC", "KEGG_Pathway")
+ANNOTATIONS = (
+    "COG_category",
+    "EC",
+    "KEGG_Pathway",
+    "KEGG_Module",
+    "BRITE",
+)
 FIELDS = (
     *GENE_ID, "contig", "gff_gene_id", "locus_tag",
     *ANNOTATIONS,
 )
 
+
+def ec_subclasses(value):
+    return tuple(sorted({
+        ".".join(ec.split(".")[:2])
+        for ec in value.split(",")
+        if len(ec.split(".")) >= 2
+        and all(x.isdigit() for x in ec.split(".")[:2])
+    }))
 
 def reference_metadata(gff):
     """Associate each GFF contig with its NCBI assembly metadata.

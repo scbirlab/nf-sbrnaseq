@@ -28,9 +28,20 @@ process DownloadEggnogDBs {
         curl -v "\$URL/\$f" -o eggnogdb/\$f
     done
 
-    gunzip eggnogdb/*.gz
-    tar -xvf eggnogdb/*.tar
-    mv eggnog.* eggnogdb
+    if [ -f eggnogdb/*.gz ]
+    then
+        gunzip eggnogdb/*.gz
+    fi
+
+    if [ -f eggnogdb/*.tar ]
+    then
+        tar -xvf eggnogdb/*.tar
+    fi
+
+    if [ -f eggnog.* ]
+    then
+        mv eggnog.* eggnogdb
+    fi
 
     """
 
@@ -39,7 +50,7 @@ process DownloadEggnogDBs {
 process EggnogFunctionalSets {
 
     tag "${id}"
-    label 'big_cpu'
+    label 'big_cpu_mem'
 
     publishDir(
         "${params.outputs}/genome", 
@@ -58,18 +69,15 @@ process EggnogFunctionalSets {
     """
     mkdir tmp scratch
 
-    emapper.py \
-        -i "${fasta}" \
-        --data_dir "${dbs}" \
-        --itype proteins \
-        --tax_scope bacteria \
-        --target_orthologs all \
-        --report_orthologs \
-        --cpu ${task.cpus} \
-        --usemem \
-        --scratch_dir scratch \
-        --temp_dir tmp \
-        -o emap \
+    emapper.py \\
+        -i "${fasta}" \\
+        --data_dir "${dbs}" \\
+        --itype proteins \\
+        --tax_scope bacteria \\
+        --cpu ${task.cpus} \\
+        --scratch_dir scratch \\
+        --temp_dir tmp \\
+        -o emap \\
         --decorate_gff "${gff}"
 
     mv emap.emapper.annotations emap.tsv

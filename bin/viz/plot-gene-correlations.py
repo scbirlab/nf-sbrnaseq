@@ -175,13 +175,17 @@ def gene_embedding(distances):
     ).fit_transform(distances)
 
 
-def group_colors(groups):
-    """Stable carabiner colour assignment with a grey fallback."""
+def group_colors(groups, top):
+    """Colour all groups, prioritising those shown on UMAP."""
     names = sorted(set(groups) - {"Unclassified"})
-    palette = cycle(colorblind_palette())
 
+    ordered = list(top) + [
+        name for name in names if name not in top
+    ]
+
+    palette = cycle(colorblind_palette())
     colors = {
-        name: next(palette) for name in names
+        name: next(palette) for name in ordered
     }
     colors["Unclassified"] = "lightgrey"
 
@@ -286,8 +290,6 @@ def main():
         parsed, groups = primary_groups(
             metadata[field], kind
         )
-        colors = group_colors(groups)
-
         # Primary-category counts determine the top eight.
         counts = Counter(
             g for g in groups if g != "Unclassified"
@@ -298,6 +300,7 @@ def main():
                 key=lambda item: (-item[1], item[0]),
             )[:args.top_groups]
         ]
+        colors = group_colors(groups)
 
         metadata[f"{kind}_memberships"] = [
             ",".join(terms) for terms in parsed

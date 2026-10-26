@@ -2,7 +2,7 @@ process build_AnnData {
    tag "${id}"
    label "big_mem"
 
-   errorStrategy 'ignore'
+   // errorStrategy 'ignore'
 
    publishDir( 
       "${params.outputs}/scanpy/build", 

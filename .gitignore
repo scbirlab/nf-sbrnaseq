@@ -6,6 +6,7 @@
 .singularity/
 test/*/outputs/
 test/*/*/outputs/
+test/_db/
 work/
 __pycache__/
 *.pyc
