@@ -28,20 +28,20 @@ process DownloadEggnogDBs {
         curl -v "\$URL/\$f" -o eggnogdb/\$f
     done
 
-    if [ -f eggnogdb/*.gz ]
-    then
-        gunzip eggnogdb/*.gz
-    fi
+    for f in eggnogdb/*.gz
+    do
+        gunzip -v "\$f"
+    done
 
-    if [ -f eggnogdb/*.tar ]
-    then
-        tar -xvf eggnogdb/*.tar
-    fi
+    for f in eggnogdb/*.tar
+    do
+        tar -xvf "\$f"
+    done
 
-    if [ -f eggnog.* ]
-    then
-        mv eggnog.* eggnogdb
-    fi
+    for f in eggnog.*
+    do
+        mv "\$f" eggnogdb/
+    done
 
     """
 
@@ -75,6 +75,7 @@ process EggnogFunctionalSets {
         --itype proteins \\
         --tax_scope bacteria \\
         --cpu ${task.cpus} \\
+        --dbmem \\
         --scratch_dir scratch \\
         --temp_dir tmp \\
         -o emap \\

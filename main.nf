@@ -739,29 +739,41 @@ workflow {
       | EmbedTRNA
 
    
-    // Match eggNOG annotations to genes using original NCBI GFF.
-    fetch_genome_from_NCBI.out.nucleotides
-        .map { accession, fasta, gff ->
-            tuple(accession, gff)
-        }
-        .combine( EggnogFunctionalSets.out.table, by: 0 )
-        | EmapperGeneTable
+    
+    // Functional annotations are optional, but correlations are not.
+    if ( params.use_eggnog || params.eggnogdb ) {
 
-    // Share genome-level annotation tables across samples.
-    genome_ch
-        .map { sample_id, accession ->
-            tuple(accession, sample_id)
-        }
-        .combine( EmapperGeneTable.out.table, by: 0 )
-        .map { accession, sample_id, table ->
-            tuple(sample_id, table)
-        }
-        .set { sample_functional_table }
+        fetch_genome_from_NCBI.out.nucleotides
+            .map { accession, fasta, gff ->
+                tuple( accession, gff )
+            }
+            .combine( EggnogFunctionalSets.out.table, by: 0 )
+            | EmapperGeneTable
 
-    // Existing visualisation interface remains unchanged.
-    cluster_cells.out.anndata
-        .join( sample_functional_table, by: 0 )
-        | PlotGeneCorrelations
+        genome_ch
+            .map { sample_id, accession ->
+                tuple( accession, sample_id )
+            }
+            .combine( EmapperGeneTable.out.table, by: 0 )
+            .map { accession, sample_id, table ->
+                tuple( sample_id, table )
+            }
+            .set { sample_functional_table }
+
+        cluster_cells.out.anndata
+            .combine( sample_functional_table, by: 0 )
+            | PlotGeneCorrelations
+
+    } else {
+
+        // Empty path collection: no annotation file is staged.
+        cluster_cells.out.anndata
+            .map { sample_id, clustered ->
+                tuple( sample_id, clustered, [] )
+            }
+            | PlotGeneCorrelations
+
+    }
 
    multimodal_umap_inputs = cluster_cells.out.anndata
       .combine( BuildMuData.out, by: 0 )

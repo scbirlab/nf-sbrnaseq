@@ -9,6 +9,7 @@ dependencies:
     - pip
     - bioconda::bedops
     - bioconda::bedtools
+    - bioconda::eggnog-mapper
     - bioconda::bowtie2
     - bioconda::fastqc
     - bioconda::minimap2
@@ -36,7 +37,6 @@ dependencies:
         - 'carabiner-tools[mpl,pd]>=0.0.5.post3'
         - 'cutadapt>=5.0'
         - 'deeptools==3.5.6'
-        - 'eggnog-mapper>=3'
         - mudata
         - 'multiqc>=1.27'
         - 'numpy>=2.1.3'

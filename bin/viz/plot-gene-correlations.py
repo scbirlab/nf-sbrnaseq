@@ -104,7 +104,7 @@ def read_annotations(path, genes):
     return result
 
 
-def expression_matrix(adata, min_cells, max_genes):
+def expression_matrix(adata, min_cells, max_genes=None):
     """Select variable genes using detection in the raw count layer."""
     if "counts" not in adata.layers:
         raise ValueError("Missing counts layer")
@@ -121,8 +121,12 @@ def expression_matrix(adata, min_cells, max_genes):
     x = x.toarray() if issparse(x) else np.asarray(x)
 
     chosen = np.argsort(
-        -x.var(axis=0), kind="stable"
-    )[:max_genes]
+        -x.var(axis=0), 
+        kind="stable",
+    )
+    
+    if max_genes is not None and isinstance(max_genes, int):
+        chosen = chosen[:max_genes]
 
     frame = pd.DataFrame(
         x[:, chosen],
@@ -168,9 +172,9 @@ def gene_embedding(distances):
         return np.full((n, 2), np.nan)
 
     return umap.UMAP(
-        n_neighbors=min(15, n - 1),
-        metric="precomputed",
-        min_dist=0.1,
+        # n_neighbors=min(15, n - 1),
+        metric="euclidean",
+        min_dist=.1,
         random_state=42,
     ).fit_transform(distances)
 
@@ -192,18 +196,24 @@ def group_colors(groups, top):
     return colors
 
 
-def plot_gene_umap(coords, groups, colors, top,
-                   kind, filename, fmt):
+def plot_gene_umap(
+    coords, 
+    groups, 
+    colors, 
+    top,
+    kind, 
+    filename, 
+    fmt
+):
     """Show eight most populated functional groups."""
     if not np.isfinite(coords).all():
         print_err(f"Skipping {kind} UMAP: too few genes")
         return
 
-    fig, ax = plt.subplots(figsize=(8, 6))
+    fig, ax = grid(figsize=(8, 6))
     groups = np.asarray(groups)
 
     background = ~np.isin(groups, top)
-
     ax.scatter(
         *coords[background].T,
         color="lightgrey",
@@ -214,7 +224,7 @@ def plot_gene_umap(coords, groups, colors, top,
     )
 
     for group in top:
-        mask = groups == group
+        ma = groups == group
         ax.scatter(
             *coords[mask].T,
             color=colors[group],
@@ -244,62 +254,114 @@ def plot_gene_umap(coords, groups, colors, top,
     plt.close(fig)
 
 
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--clustered", required=True)
-    parser.add_argument("--annotations", required=True)
+    parser.add_argument("--annotations", default=None)
     parser.add_argument("--output", default="correlations")
     parser.add_argument(
         "--min-cells-per-gene", type=int, default=3
     )
-    parser.add_argument("--max-genes", type=int, default=150)
+    parser.add_argument("--max-genes", type=int, default=None)
     parser.add_argument("--top-groups", type=int, default=8)
     parser.add_argument("--plot-format", default="png")
     args = parser.parse_args()
 
-    if args.max_genes < 2:
-        parser.error("--max-genes must be >= 2")
-    if args.top_groups < 1:
-        parser.error("--top-groups must be >= 1")
+    if args.max_genes is not None:
+        if args.max_genes < 2:
+            parser.error("--max-genes must be >= 2")
+        if args.top_groups < 1:
+            parser.error("--top-groups must be >= 1")
 
     prefix = Path(args.output)
     prefix.parent.mkdir(parents=True, exist_ok=True)
 
     rna = ad.read_h5ad(args.clustered)
     frame = expression_matrix(
-        rna, args.min_cells_per_gene, args.max_genes
+        rna, 
+        args.min_cells_per_gene, 
+        args.max_genes,
     )
 
     corr, distances, hierarchy = correlations(frame)
     corr.to_csv(f"{prefix}.matrix.csv")
 
     coords = gene_embedding(distances)
-    metadata = read_annotations(
-        args.annotations, corr.index
-    )
-    metadata["UMAP_1"] = coords[:, 0]
-    metadata["UMAP_2"] = coords[:, 1]
-
-    pd.DataFrame(
+    df = pd.DataFrame(
         coords,
         index=corr.index,
         columns=["UMAP_1", "UMAP_2"],
-    ).to_csv(f"{prefix}.gene-umap.csv")
+    )
+
+    size = max(7, min(28, len(corr) * .15))
+
+    # Without functional annotations, produce one plain
+    # correlation heatmap and one uncoloured gene UMAP.
+    if not args.annotations:
+        print_err("No eggNOG annotations: plotting plain correlations")
+
+        hm = heatmap(
+            corr,
+            color_label="Spearman $\\rho$",
+            filename=f"{prefix}.heatmap",
+            output_format=args.plot_format,
+            row_linkage=hierarchy,
+            col_linkage=hierarchy,
+            cmap="vlag",
+            vmin=-1,
+            vmax=1,
+            center=0,
+            figsize=(size, size),
+            mask_missing=False,
+        )
+
+        if np.isfinite(coords).all():
+            fig, ax = grid(aspect_ratio=1.2)
+            ax.scatter(
+                *coords.T,
+                s=10.,
+                rasterized=True,
+            )
+            ax.set(
+                xlabel="Gene UMAP 1",
+                ylabel="Gene UMAP 2",
+                title="Gene expression correlations",
+            )
+            _figsaver(
+                fig=fig,
+                name=f"{prefix}.gene-umap",
+                df=df,
+            )
+        else:
+            print_err("Skipping gene UMAP: fewer than four genes")
+
+        print_err(f"Analysed {len(corr)} genes")
+        return None
+
+    # Functional annotations: COG, EC and KEGG.
+    metadata = read_annotations(
+        args.annotations, 
+        corr.index,
+    )
+    metadata["UMAP_1"], metadata["UMAP_2"] = coords[:, :2].T
 
     for kind, field in ANNOTATIONS.items():
         parsed, groups = primary_groups(
-            metadata[field], kind
+            metadata[field], 
+            kind,
         )
-        # Primary-category counts determine the top eight.
+
         counts = Counter(
             g for g in groups if g != "Unclassified"
         )
         top = [
             group for group, _ in sorted(
                 counts.items(),
-                key=lambda item: (-item[1], item[0]),
+                key=lambda x: (-x[1], x[0]),
             )[:args.top_groups]
         ]
+
         colors = group_colors(groups)
 
         metadata[f"{kind}_memberships"] = [
@@ -318,14 +380,11 @@ def main():
             for group in groups
         ]
 
-        # Use the shared heatmap implementation.
         strips = pd.Series(
             metadata[f"{kind}_heatmap_color"],
             index=corr.index,
             name=kind.upper(),
         )
-
-        size = max(7, min(28, len(corr) * .15))
 
         hm = heatmap(
             corr,
@@ -343,7 +402,6 @@ def main():
             figsize=(size, size),
             mask_missing=False,
         )
-        plt.close(hm.fig)
 
         plot_gene_umap(
             coords, groups, colors, top,

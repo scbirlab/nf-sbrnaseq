@@ -15,7 +15,7 @@ case "$PROFILE" in
   crick) 
     export NXF_CONTAINER_ENGINE=singularity; 
     PROFILE=local
-    EXTRA="-with-singularity --eggnogdb ""$HERE""/_db/eggnogdb"
+    EXTRA="-with-singularity --use_eggnog --eggnogdb ""$HERE""/_db/eggnogdb-6"
     module load Singularity Nextflow
     ;;
   local) EXTRA="-with-conda" ;;

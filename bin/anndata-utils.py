@@ -20,7 +20,7 @@ from scipy.sparse import csr_matrix, coo_matrix, issparse
 from pandas.api.types import CategoricalDtype
 
 CELL_ID = ["cell_barcode"]
-GENE_ID = ["genome_accession", "assembly", "chr", "gene_id", "Name"]
+GENE_ID = ["genome_accession", "assembly", "chr", "gene_id"]
 UMI_COUNT_COLUMN = "umi_count"
 MIN_COUNTS_PER_CELL = 60
 MIN_CELLS_PER_GENE = 3

@@ -167,7 +167,6 @@ process PlotGeneCorrelations {
     python ${projectDir}/bin/viz/plot-gene-correlations.py \\
         --clustered "${clustered}" \\
         --min-cells-per-gene ${params.min_cells_per_gene} \\
-        --annotations "${ann}" \\
-        --output correlations
+        --output correlations ${ann ? "--annotations \"${ann}\"" : ""}
     """
 }

@@ -109,9 +109,23 @@ def read_emapper(path):
             query = row["query"]
 
             if query in result:
-                raise ValueError(
-                    f"Duplicate emapper protein query: {query}"
-                )
+                previous = result[query]
+
+                conflicts = [
+                    field for field in ANNOTATIONS
+                    if parse_terms(previous.get(field, ""), field)
+                    != parse_terms(row.get(field, ""), field)
+                ]
+
+                if conflicts:
+                    raise ValueError(
+                        f"Conflicting eggNOG annotations for "
+                        f"protein {query}: {conflicts}"
+                    )
+
+                # Duplicate protein accession with equivalent
+                # functional annotations. Retain one record.
+                continue
 
             result[query] = row
 
@@ -266,6 +280,12 @@ def gene_table(gff, annotations):
             "EC": ",".join(sorted(values["EC"])),
             "KEGG_Pathway": ",".join(
                 sorted(values["KEGG_Pathway"])
+            ),
+            "KEGG_Module": ",".join(
+                sorted(values["KEGG_Module"])
+            ),
+            "BRITE": ",".join(
+                sorted(values["BRITE"])
             ),
         })
 
