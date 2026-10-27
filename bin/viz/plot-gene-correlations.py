@@ -310,19 +310,19 @@ def main():
     symbols = gene_info.get(
         "Name",
         pd.Series("", index=gene_info.index),
-    ).fillna("")
+    ).astype("string").fillna("")
 
     loci = gene_info.get(
         "locus_tag",
         pd.Series("", index=gene_info.index),
-    ).fillna("")
+    ).astype("string").fillna("")
 
-labels = [
-    gene_label(gid, symbol, locus)
-    for gid, symbol, locus in zip(
-        corr.index, symbols, loci
-    )
-]
+    labels = [
+        gene_label(gid, symbol, locus)
+        for gid, symbol, locus in zip(
+            corr.index, symbols, loci
+        )
+    ]
 
     # Preserve stable IDs for calculations and exports.
     # Relabel only the matrix passed to plotting.

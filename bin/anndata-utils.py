@@ -385,8 +385,8 @@ def _cluster(args: Namespace) -> None:
         gene_label(gid, symbol, locus)
         for gid, symbol, locus in zip(
             adata.var_names,
-            adata.var["Name"].fillna(""),
-            adata.var["locus_tag"].fillna(""),
+            adata.var["Name"].astype(str).fillna(""),
+            adata.var["locus_tag"].astype(str).fillna(""),
         )
     ]
 
