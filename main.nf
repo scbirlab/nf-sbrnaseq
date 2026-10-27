@@ -605,13 +605,15 @@ workflow {
                .map { v -> tuple( v[0], v[2] ) }
                .unique(),
             by: 0,
-         )  // id, counts, qc, genome_acc
+         )
+         // id, counts, qc, genome_acc
          .map { v -> tuple( v[3], v[0], v[1], v[2] ) }
          .combine(
-            ClusterMoleculeEnds.out.loci,
+            AnnotateEndLoci.out,
             by: 0,
-         )  // genome_acc, id, counts, qc, loci, bed
-         .map { v -> tuple(v[1], v[2], v[3], v[4]) }
+         )
+         // genome_acc, id, counts, qc, annotated.tsv
+         .map { v -> v[1..4] }
          | BuildEnd5AnnData
 
     }

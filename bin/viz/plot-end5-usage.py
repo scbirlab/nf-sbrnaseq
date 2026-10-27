@@ -146,67 +146,53 @@ def main():
     usage.to_csv(f"{args.output}.cluster-usage.csv")
 
     # Resolve gene identifiers and display labels.
+    from viz_utils.labels import gff_attributes
+
+    # Existing BEDTools annotations, already stored in end5.var.
     site_info = mdata_end5.var.reindex(usage.index)
 
-    gene_ids = []
-    display_labels = []
+    attrs = [
+        gff_attributes(value)
+        for value in site_info["feature_attributes"].astype(str).fillna("")
+    ]
 
-    for site, attrs in zip(
-        usage.index,
-        site_info["feature_attributes"].fillna(""),
-    ):
-        gene_id, symbol = end_locus_gene(site, attrs)
-        gene_ids.append(gene_id)
-        display_labels.append(
-            end_locus_label(site, attrs)
-        )
+    # Use the GFF gene ID to group loci, not the display symbol.
+    gene_ids = [
+        a.get("ID") or a.get("locus_tag") or f"unassigned:{site}"
+        for site, a in zip(usage.index, attrs)
+    ]
 
-    # Alternate black/white every time the annotated
-    # gene changes along the chromosome.
-    # Unannotated sites each receive a distinct group.
-    chromosomes = site_info["contig"].astype(str).tolist()
+    symbols = [
+        a.get("gene") or a.get("Name") or a.get("locus_tag") or ""
+        for a in attrs
+    ]
 
+    display_labels = [
+        f"{symbol} ({site})" if symbol and symbol != site else site
+        for site, symbol in zip(usage.index, symbols)
+    ]
+
+    # Alternate black/white for consecutive nearest-gene groups.
     blocks = []
-    block = -1
     previous = None
+    block = -1
 
-    for chrom, gene_id in zip(chromosomes, gene_ids):
-        key = (chrom, gene_id)
-
+    for contig, gene_id in zip(site_info["contig"], gene_ids):
+        key = (contig, gene_id)
         if key != previous:
             block += 1
-
         blocks.append(block)
         previous = key
 
     row_colors = pd.Series(
-        [
-            "black" if b % 2 == 0 else "white"
-            for b in blocks
-        ],
+        ["black" if b % 2 == 0 else "white" for b in blocks],
         index=display_labels,
-        name="Gene",
+        name="Nearest gene",
     )
 
-    # Export the annotations used to construct the heatmap.
-    label_table = pd.DataFrame({
-        "locus_id": usage.index,
-        "display_label": display_labels,
-        "gene_group": gene_ids,
-        "gene_block": blocks,
-        "row_color": row_colors.to_numpy(),
-    })
-    label_table.to_csv(
-        f"{args.output}.locus-labels.csv",
-        index=False,
-    )
-
-    # Only cluster fractions; exclude the total_count column.
     display_usage = usage[labels].copy()
     display_usage.index = display_labels
 
-    # Genomic ordering is already applied. Passing row_idx
-    # disables row clustering in viz_utils.heatmap().
     hm = heatmap(
         display_usage,
         color_label="Fraction of assigned ends",
@@ -219,6 +205,7 @@ def main():
             max(8, len(display_usage) * 0.20),
         ),
     )
+
     saver = figsaver(format=args.plot_format)
     xy = np.asarray(rna.obsm["X_umap"])
 
@@ -279,6 +266,17 @@ def main():
             fig=fig,
             name=f"{args.output}.umap.page{offset // 24 + 1:02d}",
             df=data,
+        )
+        pd.DataFrame({
+            "locus_id": usage.index,
+            "gene_id": gene_ids,
+            "gene_symbol": symbols,
+            "display_label": display_labels,
+            "gene_block": blocks,
+            "row_color": row_colors.to_numpy(),
+        }).to_csv(
+            f"{args.output}.locus-labels.csv",
+            index=False,
         )
 
     print_err(
