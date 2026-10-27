@@ -13,7 +13,8 @@ set -euo pipefail
 #   IMAGE=ghcr.io/scbirlab/nf-sbrnaseq:latest scripts/run-docker-test.sh ...
 
 REPO="$(readlink -f "$(dirname "${BASH_SOURCE[0]}")/../..")"
-IMAGE="${IMAGE:-nf-sbrnaseq:test}"
+# IMAGE="${IMAGE:-nf-sbrnaseq:test}"
+IMAGE="${IMAGE:-"ghcr.io/scbirlab/nf-sbrnaseq:latest"}"
 PYTHON=/opt/conda/envs/env/bin/python
 
 if [[ $# -eq 0 ]]; then
