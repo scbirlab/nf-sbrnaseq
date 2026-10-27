@@ -58,6 +58,7 @@ rna = ad.AnnData(
         "gene_biotype": (
             ["protein_coding"] * 2 + ["tRNA"] * 5
         ),
+        "is_tRNA": [False] * 2 + [True] * 5,
     }, index=[
         "geneA", "geneB",
         "trna1", "trna2", "trna3", "trna4", "trna5",
@@ -83,7 +84,7 @@ with tempfile.TemporaryDirectory() as directory:
     mu_file = tmp / "sample.h5mu"
 
     rna.write_h5ad(rna_file)
-    mu.MuData({"5'-end": end5}).write_h5mu(mu_file)
+    mu.MuData({"end5": end5}).write_h5mu(mu_file)
 
     run(
         "embed-trna.py",

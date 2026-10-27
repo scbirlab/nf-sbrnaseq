@@ -1,5 +1,5 @@
 
-name: Nextflow test
+name: Nextflow smoke test
 
 on: [push]
 

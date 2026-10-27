@@ -62,8 +62,8 @@ def heatmap(
 
     if figsize is None:
         figsize = (
-            max(6, min(14, values.shape[1] * .5)),
-            max(6, min(14, values.shape[0] * .25)),
+            max(5., min(24., values.shape[1] * .2)),
+            max(5., min(24., values.shape[0] * .2)),
         )
 
     hm = sns.clustermap(
@@ -86,12 +86,11 @@ def heatmap(
         figsize=figsize,
     )
 
-    hm.ax_heatmap.tick_params(
-        axis="y", labelsize=6
-    )
-    hm.ax_heatmap.tick_params(
-        axis="x", labelsize=6
-    )
+    for _ax in ("x", "y"):
+        hm.ax_heatmap.tick_params(
+            axis=_ax, 
+            labelsize=4.,
+        )
 
     formats = (
         ("png", "pdf")

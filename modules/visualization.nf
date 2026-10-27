@@ -12,7 +12,7 @@ process PlotRNAUMAPs {
     tuple val( id ), path( clustered ), path( h5mu )
 
     output:
-    tuple val( id ), path( "umap.*.png" ), emit: figures
+    tuple val( id ), path( "umap.*.pdf" ), emit: figures
     tuple val( id ), path( "umap.*.csv" ), emit: tables
 
     script:
@@ -26,7 +26,8 @@ process PlotRNAUMAPs {
     python ${projectDir}/bin/viz/plot-umaps.py \\
         --clustered "${clustered}" \\
         --mudata "${h5mu}" \\
-        --output umap
+        --output umap \\
+        --plot-format pdf
 
     """
 }
@@ -45,7 +46,7 @@ process PlotModSites {
     tuple val( id ), path( clustered ), path( h5mu )
 
     output:
-    tuple val( id ), path( "modsites.*.png" ), emit: figures, optional: true
+    tuple val( id ), path( "modsites.*.pdf" ), emit: figures, optional: true
     tuple val( id ), path( "modsites.*.csv" ), emit: tables, optional: true
 
     script:
@@ -63,7 +64,8 @@ process PlotModSites {
         --clustered "${clustered}" \\
         --mudata "${h5mu}" \\
         --output modsites \\
-        --min-depth 1
+        --min-depth 1 \\
+        --plot-format pdf
     """
 }
 
@@ -84,7 +86,7 @@ process EmbedTRNA {
     output:
     tuple val( id ), path( "trna.h5ad" ), emit: anndata
     tuple val( id ), path( "trna.status.csv" ), emit: status
-    tuple val( id ), path( "trna.umap.png" ), emit: figures, optional: true
+    tuple val( id ), path( "trna.umap.pdf" ), emit: figures, optional: true
     tuple val( id ), path( "trna.umap.csv" ), emit: tables, optional: true
 
     script:
@@ -99,7 +101,8 @@ process EmbedTRNA {
 
     python ${projectDir}/bin/viz/embed-trna.py \\
         --clustered "${clustered}" \\
-        --output trna
+        --output trna \\
+        --plot-format pdf
     """
 }
 
@@ -118,7 +121,7 @@ process PlotEnd5Usage {
     output:
     tuple val( id ), path( "end5.status.csv" ), emit: status
     tuple val( id) , path( "end5.annotations.csv" ), emit: annotations
-    tuple val( id ), path( "end5.*.png" ), emit: figures, optional: true
+    tuple val( id ), path( "end5.*.pdf" ), emit: figures, optional: true
     tuple val( id ), path( "end5.*.csv" ), emit: tables, optional: true
 
     script:
@@ -134,7 +137,8 @@ process PlotEnd5Usage {
     python ${projectDir}/bin/viz/plot-end5-usage.py \\
         --clustered "${clustered}" \\
         --mudata "${h5mu}" \\
-        --output end5
+        --output end5 \\
+        --plot-format pdf
     """
 }
 
@@ -153,7 +157,7 @@ process PlotGeneCorrelations {
     tuple val( id ), path( clustered ), path( ann )
 
     output:
-    tuple val( id ), path( "correlations.*.png" ), emit: figures
+    tuple val( id ), path( "correlations.*.pdf" ), emit: figures
 
     script:
     """
@@ -167,6 +171,7 @@ process PlotGeneCorrelations {
     python ${projectDir}/bin/viz/plot-gene-correlations.py \\
         --clustered "${clustered}" \\
         --min-cells-per-gene ${params.min_cells_per_gene} \\
-        --output correlations ${ann ? "--annotations \"${ann}\"" : ""}
+        --output correlations ${ann ? "--annotations \"${ann}\"" : ""} \\
+        --plot-format pdf
     """
 }
