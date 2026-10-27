@@ -8,6 +8,7 @@ from pathlib import Path
 import anndata as ad
 from carabiner import print_err
 from carabiner.mpl import grid, figsaver
+import matplotlib.pyplot as plt
 from matplotlib.colors import Normalize
 import mudata as mu
 import numpy as np
@@ -155,6 +156,7 @@ def run(clustered, mudata, prefix, fmt, min_depth, page_size):
         if hm.dendrogram_col is not None
         else None
     )
+    plt.close(hm.fig)
     heatmap(
         coverage_df,
         color_label="Fraction callable",

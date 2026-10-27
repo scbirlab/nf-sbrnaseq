@@ -75,7 +75,16 @@ end5 = ad.AnnData(
     obs=pd.DataFrame({
         "present_in_modality": True,
     }, index=qualified),
-    var=pd.DataFrame(index=["locusA", "locusB"]),
+    var=pd.DataFrame({
+        "contig": ["chr1", "chr1"],
+        "start1": [100, 200],
+        "end1": [105, 205],
+        "strand": ["+", "-"],
+        "feature_attributes": [
+            "ID=geneA;Name=geneA",
+            "ID=geneB;Name=geneB",
+        ],
+    }, index=["locusA", "locusB"]),
 )
 
 with tempfile.TemporaryDirectory() as directory:
@@ -110,7 +119,7 @@ with tempfile.TemporaryDirectory() as directory:
     )
     assert np.isclose(usage.loc["locusA", "0"], 10 / 12)
     assert np.isclose(usage.loc["locusA", "1"], 2 / 12)
-    assert (tmp / "end5.heatmap.png").exists()
+    assert (tmp / "end5.end5-locus-usage.png").exists()
     print("PASS: independent 5'-end usage")
 
     run(

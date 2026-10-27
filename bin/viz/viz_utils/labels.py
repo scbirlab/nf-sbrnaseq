@@ -32,14 +32,37 @@ def gff_attributes(value):
     return attributes
 
 
+
+def end_locus_gene(identifier, feature_attributes):
+    """Return stable gene grouping ID and human-readable symbol."""
+    attrs = gff_attributes(feature_attributes)
+
+    gene_id = (
+        attrs.get("ID")
+        or attrs.get("locus_tag")
+        or ""
+    )
+
+    symbol = (
+        attrs.get("gene")
+        or attrs.get("Name")
+        or ""
+    )
+
+    if not symbol and gene_id.startswith("gene-"):
+        symbol = gene_id.removeprefix("gene-")
+
+    # Unannotated loci must not all form one group.
+    if not gene_id:
+        gene_id = f"unassigned:{identifier}"
+
+    return gene_id, symbol
+
+
 def end_locus_label(identifier, feature_attributes):
-    """Label an end locus with its nearest annotated gene."""
-    attributes = gff_attributes(feature_attributes)
-    symbol = attributes.get("gene", "")
-
-    # NCBI gene symbols generally occur under 'gene'.
-    # Name is a fallback when it differs from locus_tag.
-    if not symbol:
-        symbol = attributes.get("Name", "")
-
+    """Return symbol plus stable end-locus identifier."""
+    _, symbol = end_locus_gene(
+        identifier, feature_attributes
+    )
     return gene_label(identifier, symbol, identifier)
+

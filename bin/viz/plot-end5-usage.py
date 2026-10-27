@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 from scipy.sparse import issparse
 
-from viz_utils import heatmap, end_locus_label
+from viz_utils import heatmap, end_locus_label, end_locus_gene
 
 
 def column(matrix, j):
@@ -82,13 +82,30 @@ def main():
     clusters = rna.obs["leiden"].astype(str).to_numpy()
     labels = sorted(np.unique(clusters))
 
-    
-    site_depth = np.asarray(counts[eligible].sum(axis=0)).ravel()
+    site_depth = np.asarray(
+        counts[eligible].sum(axis=0)
+    ).ravel()
 
-    # Select the most abundant loci first.
-    selected = np.argsort(
+    # Preserve abundance ranking for paginated UMAPs.
+    top_selected = np.argsort(
         -site_depth, kind="stable"
     )[:args.top_loci]
+
+    # Include ALL sites in the heatmap, in genomic order.
+    positions = mdata_end5.var.copy()
+    positions["_index"] = np.arange(mdata_end5.n_vars)
+
+    for col in ("start1", "end1"):
+        positions[col] = pd.to_numeric(
+            positions[col], errors="raise"
+        )
+
+    positions = positions.sort_values(
+        ["contig", "start1", "end1"],
+        kind="stable",
+    )
+
+    selected = positions["_index"].to_numpy(dtype=int)
 
     # Display selected loci in genomic coordinate order.
     positions = mdata_end5.var.iloc[selected].copy()
@@ -128,40 +145,86 @@ def main():
     usage = pd.DataFrame(rows).set_index("locus_id")
     usage.to_csv(f"{args.output}.cluster-usage.csv")
 
-    # Display names are separate from the stable locus IDs.
-    display_labels = [
-        end_locus_label(
-            site,
-            mdata_end5.var.loc[site].get(
-                "feature_attributes", ""
-            ),
-        )
-        for site in usage.index
-    ]
+    # Resolve gene identifiers and display labels.
+    site_info = mdata_end5.var.reindex(usage.index)
 
+    gene_ids = []
+    display_labels = []
+
+    for site, attrs in zip(
+        usage.index,
+        site_info["feature_attributes"].fillna(""),
+    ):
+        gene_id, symbol = end_locus_gene(site, attrs)
+        gene_ids.append(gene_id)
+        display_labels.append(
+            end_locus_label(site, attrs)
+        )
+
+    # Alternate black/white every time the annotated
+    # gene changes along the chromosome.
+    # Unannotated sites each receive a distinct group.
+    chromosomes = site_info["contig"].astype(str).tolist()
+
+    blocks = []
+    block = -1
+    previous = None
+
+    for chrom, gene_id in zip(chromosomes, gene_ids):
+        key = (chrom, gene_id)
+
+        if key != previous:
+            block += 1
+
+        blocks.append(block)
+        previous = key
+
+    row_colors = pd.Series(
+        [
+            "black" if b % 2 == 0 else "white"
+            for b in blocks
+        ],
+        index=display_labels,
+        name="Gene",
+    )
+
+    # Export the annotations used to construct the heatmap.
+    label_table = pd.DataFrame({
+        "locus_id": usage.index,
+        "display_label": display_labels,
+        "gene_group": gene_ids,
+        "gene_block": blocks,
+        "row_color": row_colors.to_numpy(),
+    })
+    label_table.to_csv(
+        f"{args.output}.locus-labels.csv",
+        index=False,
+    )
+
+    # Only cluster fractions; exclude the total_count column.
     display_usage = usage[labels].copy()
     display_usage.index = display_labels
 
-    # Rows are already in genomic coordinate order.
-    # Disable row clustering; retain column clustering.
+    # Genomic ordering is already applied. Passing row_idx
+    # disables row clustering in viz_utils.heatmap().
     hm = heatmap(
         display_usage,
         color_label="Fraction of assigned ends",
         filename=f"{args.output}.end5-locus-usage",
         output_format=args.plot_format,
         row_idx=np.arange(len(display_usage)),
+        row_colors=row_colors,
         figsize=(
             max(8, len(labels) * 1.1),
-            max(8, len(display_usage) * .35),
+            max(8, len(display_usage) * 0.20),
         ),
     )
-
     saver = figsaver(format=args.plot_format)
     xy = np.asarray(rna.obsm["X_umap"])
 
     # Site-specific UMAPs, paginated.
-    for offset in range(0, len(selected), 24):
-        page = selected[offset:offset + 24]
+    for offset in range(0, len(top_selected), 24):
+        page = top_selected[offset:offset + 24]
         fig, axes = grid(
             ncol=min(4, len(page)),
             nrow=int(np.ceil(len(page) / 4)),
@@ -219,7 +282,8 @@ def main():
         )
 
     print_err(
-        f"Plotted {len(selected)} loci; "
+        f"Heatmap: {len(selected)} loci; "
+        f"UMAPs: {len(top_selected)} loci; "
         f"{eligible.sum()} eligible cells"
     )
 
