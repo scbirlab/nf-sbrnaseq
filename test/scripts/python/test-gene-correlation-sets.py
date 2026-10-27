@@ -38,7 +38,9 @@ with tempfile.TemporaryDirectory() as temp:
     adata.write_h5ad(h5ad)
 
     annotations = pd.DataFrame({
-        "contig": ["chr1"] * 12,
+        "genome_accession": ["acc"] * 12,
+        "assembly": ["asm"] * 12,
+        "chr": ["chr1"] * 12,
         "gene_id": [f"g{i}" for i in range(12)],
         "COG_category": [
             "JK", "J", "E", "E", "F", "F",
@@ -86,9 +88,15 @@ with tempfile.TemporaryDirectory() as temp:
 
     assert metadata.loc[genes[0], "cog_memberships"] == "J,K"
     assert metadata.loc[genes[0], "cog_group"] == "J"
-    assert metadata.loc[genes[11], "cog_color"] == "lightgrey"
-    assert metadata.loc[genes[11], "ec_color"] == "lightgrey"
-    assert metadata.loc[genes[11], "kegg_color"] == "lightgrey"
+    for kind in ("cog", "ec", "kegg"):
+        assert (
+            metadata.loc[genes[11], f"{kind}_heatmap_color"]
+            == "lightgrey"
+        )
+        assert (
+            metadata.loc[genes[11], f"{kind}_umap_color"]
+            == "lightgrey"
+        )
 
     matrix = pd.read_csv(
         directory / "correlations.matrix.csv",
