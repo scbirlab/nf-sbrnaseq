@@ -194,7 +194,7 @@ def gene_embedding(distances):
         return np.full((n, 2), np.nan)
 
     return umap.UMAP(
-        # n_neighbors=min(15, n - 1),
+        n_neighbors=min(15, n - 1),
         metric="euclidean",
         min_dist=.1,
         random_state=42,
@@ -307,14 +307,22 @@ def main():
 
     gene_info = rna.var.reindex(corr.index)
 
-    labels = [
-        gene_label(gid, symbol, locus)
-        for gid, symbol, locus in zip(
-            corr.index,
-            gene_info["Name"].fillna(""),
-            gene_info["locus_tag"].fillna(""),
-        )
-    ]
+    symbols = gene_info.get(
+        "Name",
+        pd.Series("", index=gene_info.index),
+    ).fillna("")
+
+    loci = gene_info.get(
+        "locus_tag",
+        pd.Series("", index=gene_info.index),
+    ).fillna("")
+
+labels = [
+    gene_label(gid, symbol, locus)
+    for gid, symbol, locus in zip(
+        corr.index, symbols, loci
+    )
+]
 
     # Preserve stable IDs for calculations and exports.
     # Relabel only the matrix passed to plotting.

@@ -52,6 +52,8 @@ with tempfile.TemporaryDirectory() as temp:
             f"ko{i % 10:05d}" for i in range(18)
         ] + ["", ""],
     })
+    annotations["KEGG_Module"] = ""
+    annotations["BRITE"] = ""
 
     table = directory / "functional.tsv"
     annotations.to_csv(table, sep="\t", index=False)
