@@ -2,6 +2,9 @@ name: Build and Push Docker image
 
 on:
   push:
+    paths:
+      - 'Dockerfile'
+      - 'environment.yml'
     # branches: [main]
     # tags: ['v*']
   workflow_dispatch:
