@@ -12,7 +12,7 @@ process PlotRNAUMAPs {
     tuple val( id ), path( clustered ), path( h5mu )
 
     output:
-    tuple val( id ), path( "umap.*.pdf" ), emit: figures
+    tuple val( id ), path( "umap.*.png" ), emit: figures
     tuple val( id ), path( "umap.*.csv" ), emit: tables
 
     script:
@@ -27,7 +27,7 @@ process PlotRNAUMAPs {
         --clustered "${clustered}" \\
         --mudata "${h5mu}" \\
         --output umap \\
-        --plot-format pdf
+        --plot-format png
 
     """
 }
@@ -121,7 +121,7 @@ process PlotEnd5Usage {
     output:
     tuple val( id ), path( "end5.status.csv" ), emit: status
     tuple val( id) , path( "end5.annotations.csv" ), emit: annotations
-    tuple val( id ), path( "end5.*.pdf" ), emit: figures, optional: true
+    tuple val( id ), path( "end5.*.png" ), emit: figures, optional: true
     tuple val( id ), path( "end5.*.csv" ), emit: tables, optional: true
 
     script:
@@ -138,7 +138,7 @@ process PlotEnd5Usage {
         --clustered "${clustered}" \\
         --mudata "${h5mu}" \\
         --output end5 \\
-        --plot-format pdf
+        --plot-format png
     """
 }
 

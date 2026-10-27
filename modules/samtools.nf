@@ -116,7 +116,7 @@ process remove_multimappers {
     tuple val( id ), path( "*.sorted.{bam,bai}" )
 
     script:
-    def unique = (require_unique && mapper == 'star' ? "-e '[NH]==1'" : "")
+    def unique = (require_unique && (mapper == 'star') ? "-e '[NH]==1'" : "")
     """
     set -euox pipefail
 
