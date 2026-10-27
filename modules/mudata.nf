@@ -71,7 +71,7 @@ process BuildMuData {
     )
 
     input:
-    tuple val( id ), path( rna ), path( h5ads, stageAs: "modalities/*" )
+    tuple val( id ), path( rna ), path( rna_qc ), path( h5ads, stageAs: "modalities/*" )
 
     output:
     tuple val( id ), path( "sample.h5mu" )
@@ -80,12 +80,45 @@ process BuildMuData {
     """
     set -euox pipefail
 
-    test -f "${rna}"
-
     python ${projectDir}/bin/anndata/build-mudata.py \\
         --rna "${rna}" \\
+        --rna-qc "${rna_qc}" \\
         --modalities modalities/*.h5ad \\
         --sample-id "${id}" \\
         --output sample.h5mu
+    """
+}
+
+
+process QCMuData {
+
+    tag "${id}"
+    label 'some_mem'
+
+    publishDir(
+        "${params.outputs}/mudata/qc",
+        mode: 'copy',
+        saveAs: { "${id}.${it}" },
+    )
+
+    input:
+    tuple val( id ), path( h5mu ) 
+
+    output:
+    tuple val( id ), path( "qc.*.png" ), emit: figures
+    tuple val( id ), path( "qc.*.csv" ), emit: tables
+
+    script:
+    """
+    set -euox pipefail
+
+    export MPLBACKEND=Agg
+    export MPLCONFIGDIR=mpl
+    export NUMBA_CACHE_DIR=numba
+    mkdir -p mpl numba
+
+    python ${projectDir}/bin/anndata/qc-mudata.py \\
+        "${h5mu}" \\
+        --output qc
     """
 }

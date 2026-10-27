@@ -15,7 +15,7 @@ def read_loci(handle):
     loci = defaultdict(list)
     reader = csv.DictReader(handle, delimiter="\t")
     required = {
-        "locus_id", "contig", "strand",
+        "end5_locus_id", "contig", "strand",
         "start1", "end1",
     }
     if not required.issubset(reader.fieldnames or []):
@@ -29,7 +29,7 @@ def read_loci(handle):
 
         key = (row["contig"], row["strand"])
         loci[key].append(
-            (start, end, row["locus_id"])
+            (start, end, row["end5_locus_id"])
         )
 
     lookup = {}

@@ -51,7 +51,7 @@ process ClusterMoleculeEnds {
     )
 
     input:
-    tuple val( id ), path( ends )
+    tuple val( id ), path( ends, stageAs: 'ends/?????.tsv' )
     val min_support
     val max_width
 
@@ -63,7 +63,7 @@ process ClusterMoleculeEnds {
     """
     set -euox pipefail
 
-    zcat "${ends}" \\
+    zcat ${ends} \\
     | awk -F '\\t' -v OFS='\\t' '
         NR == 1 {
             for ( i=1; i<=NF; i++ ) header[\$i] = i
@@ -81,6 +81,7 @@ process ClusterMoleculeEnds {
             }
         }
     ' \\
+    | grep -v '^contig' \\
     | sort -k1,1 -k2,2 -k3,3n \\
     > paraclu-input.tsv
 
@@ -129,12 +130,13 @@ process AnnotateEndLoci {
         (\$7 == "+" || \$7 == "-") {
             print \$1, \$4-1, \$5, \$9, \$6, \$7
         }' \\
+    | sort -k1,1 -k2,2n \
     > "features.bed"
 
     bedtools closest \\
         -a "${loci_bed}" \\
         -b "features.bed" \\
-        -s -D a -t all \\
+        -s -D a -t first \\
     > annotated.bed
 
     python ${projectDir}/bin/annotate-end-loci.py \\

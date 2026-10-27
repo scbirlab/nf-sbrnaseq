@@ -131,7 +131,7 @@ process bam2table {
    
    samtools view -h \
       -@${task.cpus} \
-      -F${paired ? "1664 -f3" : "1536"} \
+      -F${paired ? "1664 -f3" : "3844"} \
       --tag 'XS:Assigned' \
       "${bamfile}" \
       -bS -o filtered.bam

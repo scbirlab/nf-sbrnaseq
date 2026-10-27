@@ -24,7 +24,28 @@ def main():
     counts = pd.read_csv(args.counts, sep="\t")
     qc = pd.read_csv(args.qc, sep="\t")
 
-    loci = loci.set_index("locus_id", verify_integrity=True)
+    required_loci = {
+        "end5_locus_id", "contig", "start1", "end1", "strand"
+    }
+    missing = required_loci - set(loci.columns)
+    if missing:
+        raise ValueError(f"Missing locus annotations: {sorted(missing)}")
+
+    if loci["end5_locus_id"].isna().any():
+        raise ValueError("Missing locus identifiers")
+
+    loci = loci.set_index("end5_locus_id", verify_integrity=True)
+
+    if (loci.index.astype(str).str.len() == 0).any():
+        raise ValueError("Empty locus identifiers")
+
+    if not loci["strand"].isin(["+", "-"]).all():
+        raise ValueError("Invalid locus strand")
+
+    start = pd.to_numeric(loci["start1"], errors="raise")
+    end = pd.to_numeric(loci["end1"], errors="raise")
+    if (start < 1).any() or (end < start).any():
+        raise ValueError("Invalid locus coordinates")
 
     counts = counts.loc[
         counts["sample_id"] == args.sample_id
@@ -84,6 +105,64 @@ def main():
         dtype=np.int64,
     ).tocsr()
 
+        # Independently validate each cell against assignment QC.
+    qc_by_cell = qc.set_index("cell_barcode")
+
+    required_qc = {
+        "total_ends_count",
+        "assigned_ends_count",
+        "unassigned_ends_count",
+        "assigned_ends_fraction",
+    }
+    missing = required_qc - set(qc_by_cell.columns)
+    if missing:
+        raise ValueError(f"Missing assignment QC: {sorted(missing)}")
+
+    for column in (
+        "total_ends_count",
+        "assigned_ends_count",
+        "unassigned_ends_count",
+    ):
+        qc_by_cell[column] = pd.to_numeric(
+            qc_by_cell[column], errors="raise"
+        )
+        if (
+            qc_by_cell[column].isna().any()
+            or (qc_by_cell[column] < 0).any()
+            or (qc_by_cell[column] % 1 != 0).any()
+        ):
+            raise ValueError(f"Invalid {column}")
+
+    total = qc_by_cell["total_ends_count"]
+    assigned = qc_by_cell["assigned_ends_count"]
+    unassigned = qc_by_cell["unassigned_ends_count"]
+
+    if not (total == assigned + unassigned).all():
+        raise ValueError("Assignment QC conservation failed")
+
+    observed = pd.Series(
+        np.asarray(matrix.sum(axis=1)).ravel(),
+        index=cells,
+    )
+    expected = assigned.reindex(cells)
+
+    if not np.array_equal(observed.to_numpy(), expected.to_numpy()):
+        raise ValueError("Per-cell assigned-end counts disagree with QC")
+
+    fractions = pd.to_numeric(
+        qc_by_cell["assigned_ends_fraction"],
+        errors="raise",
+    )
+    expected_fractions = assigned.div(total.where(total > 0))
+
+    if not np.allclose(
+        fractions.to_numpy(),
+        expected_fractions.to_numpy(),
+        rtol=1e-6,
+        atol=1e-8,
+        equal_nan=True,
+    ):
+        raise ValueError("Assignment fractions disagree with QC")
 
     obs = qc.set_index("cell_barcode").reindex(cells)
     for column in (

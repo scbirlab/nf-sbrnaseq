@@ -19,7 +19,6 @@ process STAR_index {
       --runThreadN ${task.cpus} \
       --genomeDir star-index \
       --genomeFastaFiles ${fasta} \
-      --genomeSAindexNbases 10 \
       --sjdbOverhang 99 \
       --sjdbGTFfile ${gff} \
       --sjdbGTFfeatureExon CDS \
@@ -48,7 +47,7 @@ process STAR_align {
       "${params.outputs}/mapped/star", 
       mode: 'copy',
       // saveAs: { "${id}.${it}" },
-      pattern: "*.{bam,bg,tab,.star.log}"
+      pattern: "*.{bam,bg,tab,star.log}"
    )
 
    input:
@@ -78,7 +77,7 @@ process STAR_align {
       --outSAMprimaryFlag OneBestScore \\
       --outSAMattributes NH HI NM MD AS nM \\
       --outSAMattrIHstart 0 \\
-      --outFilterScoreMinOverLread 0.4 --outFilterMatchNminOverLread 0.4 --outFilterMatchNmin 16 \\
+      --outFilterScoreMinOverLread 0.1 --outFilterMatchNminOverLread 0.1 --outFilterMatchNmin 0 \\
       --twopassMode None \\
       --quantMode GeneCounts \\
       --outWigType bedGraph read1_5p \\

@@ -116,7 +116,7 @@ process remove_multimappers {
     tuple val( id ), path( "*.sorted.{bam,bai}" )
 
     script:
-    def unique = (require_unique && mapper == 'star' ? "-e '[NH]==1'" : "")
+    def unique = (require_unique && (mapper == 'star') ? "-e '[NH]==1'" : "")
     """
     set -euox pipefail
 
@@ -130,7 +130,7 @@ process remove_multimappers {
     samtools view \\
         -@ ${task.cpus} \\
         -b \\
-        -F 2308 \\
+        -F ${require_unique ? '2308' : '260'} \\
         -q ${min_mapq} ${unique} \\
         "${bamfile}" \\
     | samtools sort \\

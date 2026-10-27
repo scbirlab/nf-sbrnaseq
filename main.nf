@@ -36,10 +36,14 @@ include {
    plot_peaks;
 } from './modules/deeptools.nf'
 include {
-    ExtractMoleculeEnds;
-    ClusterMoleculeEnds;
-    AnnotateEndLoci;
-    AssignEndLoci;
+    DownloadEggnogDBs;
+    EggnogFunctionalSets;
+} from './modules/eggnog.nf'
+include {
+   ExtractMoleculeEnds;
+   ClusterMoleculeEnds;
+   AnnotateEndLoci;
+   AssignEndLoci;
 } from './modules/ends.nf'
 include { featurecounts } from './modules/featurecounts.nf'
 include { multiQC } from './modules/multiqc.nf'
@@ -49,10 +53,18 @@ include {
 } from './modules/minimap.nf'
 include { CountModSites } from './modules/modifications.nf'
 include {
-    BuildEnd5AnnData;
-    BuildModAnnData;
-    BuildMuData;
+   BuildEnd5AnnData;
+   BuildModAnnData;
+   BuildMuData;
+   QCMuData;
 } from './modules/mudata.nf'
+include {
+   PlotRNAUMAPs;
+   PlotModSites;
+   EmbedTRNA;
+   PlotEnd5Usage;
+   PlotGeneCorrelations;
+} from './modules/visualization.nf'
 include { 
    fetch_genome_from_NCBI; 
    prefetch_from_SRA;
@@ -68,6 +80,7 @@ include {
    gene_body_coverage;  
    gff2bed; 
 } from './modules/rseqc.nf'
+include { EmapperGeneTable } from './modules/functional-annotation.nf'
 include { ResolveSites } from './modules/sites.nf'
 include { 
    STAR_index; 
@@ -275,7 +288,7 @@ workflow {
       csv_ch
          .map { tuple( 
             it.sample_id,
-            file( 
+            files( 
                "${params.fastq_dir}/*${it.fastq_pattern}*",
                checkIfExists: true
             ).sort()
@@ -300,10 +313,41 @@ workflow {
       .map { v -> v[1] }  // genome_acc
       .unique()
       | fetch_genome_from_NCBI   // genome_acc, genome, gff
+   
+   if ( params.use_eggnog || params.eggnogdb ) {
+
+      if ( params.eggnogdb ) {
+
+         Channel.value( 
+            file( 
+               "${params.eggnogdb}", 
+               checkIfExists: true,
+            )
+         )
+         .set { eggnogdb }
+
+      }
+      else {
+
+         Channel.value( params.eggnog_url )
+            | DownloadEggnogDBs
+            | set { eggnogdb }
+
+      }
+
+      fetch_genome_from_NCBI.out.proteins
+         .combine(
+            fetch_genome_from_NCBI.out.nucleotides
+               .map { acc, genome, gff -> tuple(acc, gff) },
+            by: 0,
+         )
+         .combine( eggnogdb )
+         | EggnogFunctionalSets
+   }
 
    genome_ch
       .map { v -> v[1..0] }  // genome_acc, sample_id
-      .combine( fetch_genome_from_NCBI.out, by: 0 )  // genome_acc, sample_id, genome, gff
+      .combine( fetch_genome_from_NCBI.out.nucleotides, by: 0 )  // genome_acc, sample_id, genome, gff
       .tap { pre_site_ref }
       .map { v -> tuple( v[1], v[-1] ) }  // sample_id, gff
       .unique()
@@ -393,14 +437,14 @@ workflow {
       | set { extracted }
 
    if ( params.mapper == "star" ) {
-      fetch_genome_from_NCBI.out
+      fetch_genome_from_NCBI.out.nucleotides
          | STAR_index 
          | set { genome_idx0 }
    }
 
    else if ( params.mapper == "bowtie2" ) {
 
-      fetch_genome_from_NCBI.out
+      fetch_genome_from_NCBI.out.nucleotides
          .map { it[0..1] } 
          .unique()
          | bowtie2_index
@@ -411,7 +455,7 @@ workflow {
    else if ( params.mapper == "minimap2" ) {
 
       minimap_index(
-         fetch_genome_from_NCBI.out
+         fetch_genome_from_NCBI.out.nucleotides
             .map { it[0..1] }
             .unique(),
          Channel.value( params.nanopore ),
@@ -476,7 +520,7 @@ workflow {
       mapped_reads.main,
       Channel.value( params.mapper ),
       Channel.value( params.min_mapq ),
-      Channel.value( !params.allow_multimap ),
+      Channel.value( params.disable_multimap ),
    )
    Prepend_Barcode(
       remove_multimappers.out,
@@ -507,7 +551,7 @@ workflow {
          & DeduplicateMolecules
       )
 
-   fetch_genome_from_NCBI.out
+   fetch_genome_from_NCBI.out.nucleotides
       .map { v -> tuple( v[0], v[2] ) }
       .unique()
       .tap { gff_ch }
@@ -517,7 +561,7 @@ workflow {
 
       ExtractMoleculeEnds(
          DeduplicateMolecules.out,
-         Channel.value( params.end5_read ),
+         Channel.value( params.nanopore || params.unpaired ? 0 : params.end5_read ),
          Channel.value( params.end5_boundary ),
          Channel.value( params.strand ),
          Channel.value( params.min_mapq ),
@@ -561,13 +605,15 @@ workflow {
                .map { v -> tuple( v[0], v[2] ) }
                .unique(),
             by: 0,
-         )  // id, counts, qc, genome_acc
+         )
+         // id, counts, qc, genome_acc
          .map { v -> tuple( v[3], v[0], v[1], v[2] ) }
          .combine(
-            ClusterMoleculeEnds.out.loci,
+            AnnotateEndLoci.out,
             by: 0,
-         )  // genome_acc, id, counts, qc, loci, bed
-         .map { v -> tuple(v[1], v[2], v[3], v[4]) }
+         )
+         // genome_acc, id, counts, qc, annotated.tsv
+         .map { v -> v[1..4] }
          | BuildEnd5AnnData
 
     }
@@ -593,12 +639,12 @@ workflow {
          Channel.value( params.mod_min_baseq ),
          Channel.value( params.mapper ),
          Channel.value( params.min_mapq ),
-         Channel.value( params.allow_multimap ),
+         Channel.value( !params.disable_multimap ),
       )
          | BuildModAnnData
 
-
    }
+
    SAMtools_stats.out | plot_bamstats
 
    Concat_UMIcollapse.out.main
@@ -620,15 +666,22 @@ workflow {
       .unique()
       | bam2wig
 
-   bam2wig.out
+   // Map genome-level BED files back to their samples.
+   genome_ch
+      .map { v -> v[1..0] }  // genome_acc, sample_id
       .combine( gff2bed.out, by: 0 )
+      .map { v -> v[1..2] }  // sample_id, bed
+      .set { sample_bed }
+
+   bam2wig.out
+      .combine( sample_bed, by: 0 )
       | plot_peaks
 
    collapsed
-      .map { tuple( it[0], it[1] ) }
+      .map { v -> v[0..1] }
       .unique()
       .combine( 
-         gff2bed.out,
+         sample_bed,
          by: 0,
       )
       | gene_body_coverage
@@ -664,19 +717,80 @@ workflow {
    build_AnnData.out.main | filter_AnnData
    filter_AnnData.out.main | cluster_cells
 
-
-   // Collect available modalities by sample.
+   // Collect available modalities and RNA-QC membership by sample.
    build_AnnData.out.main
-      .combine( 
-         ( params.end5_enabled ? BuildEnd5AnnData.out : build_AnnData.out.main.map { it[0] }.unique() ),
+      .combine( filter_AnnData.out.main, by: 0 )
+      .combine(
+         (params.end5_enabled
+            ? BuildEnd5AnnData.out
+            : build_AnnData.out.main.map { it[0] }.unique()),
          by: 0,
       )
       .combine(
-         ( params.mod_sites ? BuildModAnnData.out : build_AnnData.out.main.map { it[0] }.unique() ), 
+         (params.mod_sites
+            ? BuildModAnnData.out
+            : build_AnnData.out.main.map { it[0] }.unique()),
          by: 0,
       )
-      .map { v -> tuple( v[0], v[1], v[2..-1] ) }
+      .map { v -> tuple(v[0], v[1], v[2], v[3..-1]) }
       | BuildMuData
+      | QCMuData
+
+   // RNA-only analyses run independently of MuData.
+   cluster_cells.out.anndata
+      | EmbedTRNA
+
+   
+    
+    // Functional annotations are optional, but correlations are not.
+    if ( params.use_eggnog || params.eggnogdb ) {
+
+        fetch_genome_from_NCBI.out.nucleotides
+            .map { accession, fasta, gff ->
+                tuple( accession, gff )
+            }
+            .combine( EggnogFunctionalSets.out.table, by: 0 )
+            | EmapperGeneTable
+
+        genome_ch
+            .map { sample_id, accession ->
+                tuple( accession, sample_id )
+            }
+            .combine( EmapperGeneTable.out.table, by: 0 )
+            .map { accession, sample_id, table ->
+                tuple( sample_id, table )
+            }
+            .set { sample_functional_table }
+
+        cluster_cells.out.anndata
+            .combine( sample_functional_table, by: 0 )
+            | PlotGeneCorrelations
+
+    } else {
+
+        // Empty path collection: no annotation file is staged.
+        cluster_cells.out.anndata
+            .map { sample_id, clustered ->
+                tuple( sample_id, clustered, [] )
+            }
+            | PlotGeneCorrelations
+
+    }
+
+   multimodal_umap_inputs = cluster_cells.out.anndata
+      .combine( BuildMuData.out, by: 0 )
+
+   multimodal_umap_inputs 
+      | PlotRNAUMAPs
+
+   if ( params.mod_sites ) {
+      multimodal_umap_inputs 
+         | PlotModSites
+   }
+   if (params.end5_enabled) {
+      multimodal_umap_inputs 
+         | PlotEnd5Usage
+   }
 
    trim_logs
       .map { it[1] }

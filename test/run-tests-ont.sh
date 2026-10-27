@@ -13,7 +13,7 @@ elif [ "$DOCKER" == "crick" ]
 then
     export NXF_CONTAINER_ENGINE=singularity
     module load Nextflow Singularity
-    docker_flag='-with-singularity -profile local'
+    docker_flag='-with-singularity -profile local --eggnogdb '"$script_dir"'/_db/eggnogdb-6'
 else
     export SINGULARITY_FAKEROOT=1
     docker_flag=''
@@ -30,6 +30,6 @@ nextflow run "$script_dir"/.. \
     --inputs "$script_dir"/ont/inputs \
     --fastq_dir "$script_dir"/ont/fastq \
     --end5_enabled \
-    --end5_read 1 \
-    --end5_boundary 5 \
+    --min_counts_per_cell 1 \
+    --min_cells_per_gene 1 \
     --outputs "$script_dir"/ont/outputs

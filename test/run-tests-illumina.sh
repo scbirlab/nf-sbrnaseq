@@ -15,7 +15,7 @@ case "$PROFILE" in
   crick) 
     export NXF_CONTAINER_ENGINE=singularity; 
     PROFILE=local
-    EXTRA="-with-singularity"
+    EXTRA="-with-singularity --use_eggnog --eggnogdb ""$HERE""/_db/eggnogdb-6"
     module load Singularity Nextflow
     ;;
   local) EXTRA="-with-conda" ;;
@@ -54,7 +54,7 @@ fi
 
 nextflow run "$REPO" \
     -resume \
-    -profile "$PROFILE" "$EXTRA" \
+    -profile "$PROFILE" $EXTRA \
     -work-dir "$HERE/illumina/$EXPT/work" \
     -with-dag "$HERE/illumina/$EXPT/dag.html" \
     --mapper star "$MM_FLAG"\
@@ -67,4 +67,5 @@ nextflow run "$REPO" \
     --end5_enabled \
     --end5_read 1 \
     --end5_boundary 5 \
+    --min_counts_per_cell 10 \
     --strand 1

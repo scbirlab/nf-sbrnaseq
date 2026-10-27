@@ -2,10 +2,10 @@ process build_AnnData {
    tag "${id}"
    label "big_mem"
 
-   errorStrategy 'ignore'
+   // errorStrategy 'ignore'
 
    publishDir( 
-      "${params.outputs}/scanpy", 
+      "${params.outputs}/scanpy/build", 
       mode: 'copy',
       saveAs: { "${id}.${it}" },
    )
@@ -36,7 +36,7 @@ process filter_AnnData {
    label "med_mem"
 
    publishDir( 
-      "${params.outputs}/scanpy", 
+      "${params.outputs}/scanpy/filter", 
       mode: 'copy',
       saveAs: { "${id}.${it}" },
    )
@@ -57,7 +57,11 @@ process filter_AnnData {
    export NUMBA_CACHE_DIR="numba"
    mkdir "\$MPLCONFIGDIR" "\$NUMBA_CACHE_DIR"
 
-   python ${projectDir}/bin/anndata-utils.py filter "${anndata}" -o filter 2> >(tee filter.log)
+   python ${projectDir}/bin/anndata-utils.py filter "${anndata}" \\
+      --min-counts-per-cell ${params.min_counts_per_cell} \\
+      --min-cells-per-gene ${params.min_cells_per_gene} \\
+      -o filter \\
+   2> >(tee filter.log)
 
 
    """
@@ -67,12 +71,12 @@ process filter_AnnData {
 process cluster_cells {
 
    tag "${id}"
-   label "med_mem"
+   label "big_mem"
 
-   errorStrategy 'ignore'
+   // errorStrategy 'ignore'
 
    publishDir( 
-      "${params.outputs}/clustering", 
+      "${params.outputs}/scanpy/cluster", 
       mode: 'copy',
       saveAs: { "${id}.${it}" },
    )
@@ -81,7 +85,8 @@ process cluster_cells {
    tuple val( id ), path( anndata )
 
    output:
-   tuple val( id ), path( "*.{png,csv}" ), emit: main
+   tuple val( id ), path( "*.{png,csv}" ), emit: main, optional: true
+   tuple val( id ), path( "cluster.h5ad" ), emit: anndata
    path "*.log", emit: logs
 
    script:
@@ -90,11 +95,20 @@ process cluster_cells {
    
    export MPLCONFIGDIR="mpl"
    export NUMBA_CACHE_DIR="numba"
+   export XDG_CACHE_HOME="\$PWD/.cache"
+   mkdir -p "\$XDG_CACHE_HOME/fontconfig"
    mkdir "\$MPLCONFIGDIR" "\$NUMBA_CACHE_DIR"
 
-   python ${projectDir}/bin/anndata-utils.py cluster "${anndata}" -o cluster 2> >(tee cluster.log)
+   python ${projectDir}/bin/anndata-utils.py cluster \\
+      "${anndata}" \\
+      -o cluster \\
+   2> >(tee cluster.log)
 
-   mv figures/*.png .
+   for f in figures/*.png
+   do
+      [ -f "\$f" ] || continue
+      mv "\$f" .
+   done
    
    """
 }

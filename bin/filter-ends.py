@@ -86,7 +86,7 @@ def select_nonoverlapping(candidates):
 
 def write_loci(rows, filename):
     columns = [
-        "locus_id", "contig", "strand",
+        "end5_locus_id", "contig", "strand",
         "start1", "end1", "width",
         "n_positions", "support",
         "min_density", "max_density",
@@ -100,7 +100,7 @@ def write_loci(rows, filename):
 
         for row in rows:
             row = dict(row)
-            row["locus_id"] = (
+            row["end5_locus_id"] = (
                 f'{row["contig"]}:'
                 f'{row["start1"]}-{row["end1"]}:'
                 f'{row["strand"]}'

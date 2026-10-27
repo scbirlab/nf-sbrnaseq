@@ -9,6 +9,7 @@ dependencies:
     - pip
     - bioconda::bedops
     - bioconda::bedtools
+    - bioconda::eggnog-mapper
     - bioconda::bowtie2
     - bioconda::fastqc
     - bioconda::minimap2
@@ -42,4 +43,5 @@ dependencies:
         - pysam
         - 'RSeQC'
         - 'scanpy[leiden]>=1.10.4'
+        - seaborn
         - 'streq>=0.0.4'

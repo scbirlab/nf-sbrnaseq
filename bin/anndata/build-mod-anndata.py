@@ -133,6 +133,20 @@ def main():
 
     adata.obs["sample_id"] = args.sample_id
     adata.uns["alt_fraction_denominator"] = "ref_alt_depth"
+    adata.uns["coverage_semantics"] = {
+        "callable_depth": "sum of accepted A/C/G/T base calls",
+        "ref_alt_depth": "ref_count + alt_count",
+        "alt_fraction": (
+            "alt_count / ref_alt_depth where ref_alt_depth > 0; "
+            "undefined otherwise"
+        ),
+        "zero_alt": (
+            "ALT count of zero does not imply an unmodified RNA"
+        ),
+        "no_coverage": (
+            "callable_depth == 0; do not interpret as REF"
+        ),
+    }
 
     assert int(adata.X.sum()) == int(df.alt_count.sum())
     assert int(adata.layers["callable_depth"].sum()) == int(df.callable_depth.sum())
