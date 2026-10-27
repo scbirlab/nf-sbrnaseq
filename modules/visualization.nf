@@ -46,7 +46,7 @@ process PlotModSites {
     tuple val( id ), path( clustered ), path( h5mu )
 
     output:
-    tuple val( id ), path( "modsites.*.pdf" ), emit: figures, optional: true
+    tuple val( id ), path( "modsites.*.png" ), emit: figures, optional: true
     tuple val( id ), path( "modsites.*.csv" ), emit: tables, optional: true
 
     script:
@@ -65,7 +65,7 @@ process PlotModSites {
         --mudata "${h5mu}" \\
         --output modsites \\
         --min-depth 1 \\
-        --plot-format pdf
+        --plot-format png
     """
 }
 
