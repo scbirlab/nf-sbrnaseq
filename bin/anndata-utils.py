@@ -427,7 +427,7 @@ def _cluster(args: Namespace) -> None:
     else:
         adata.var["highly_variable_non_rRNA"] = (adata.var["not_is_rRNA"] & adata.var["highly_variable"])
         print_err(f"Found {adata.var['highly_variable_non_rRNA'].sum()} highly variable genes!")
-        use_highly_variable = False #adata.var['highly_variable_non_rRNA'].sum() >= 3
+        use_highly_variable = adata.var['highly_variable_non_rRNA'].sum() >= 3
 
     
     print_err("Applying PCA...")
