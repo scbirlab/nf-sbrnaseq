@@ -130,6 +130,7 @@ process AnnotateEndLoci {
         (\$7 == "+" || \$7 == "-") {
             print \$1, \$4-1, \$5, \$9, \$6, \$7
         }' \\
+    | sort -k1,1 -k2,2n \
     > "features.bed"
 
     bedtools closest \\

@@ -9,6 +9,7 @@ from pathlib import Path
 
 import anndata as ad
 from carabiner import colorblind_palette, print_err
+from carabiner.mpl import grid, figsaver
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -210,48 +211,45 @@ def plot_gene_umap(
         print_err(f"Skipping {kind} UMAP: too few genes")
         return
 
-    fig, ax = grid(figsize=(8, 6))
+    fig, ax = grid(aspect_ratio=1.2)
     groups = np.asarray(groups)
 
     background = ~np.isin(groups, top)
     ax.scatter(
         *coords[background].T,
         color="lightgrey",
-        s=12,
-        alpha=0.65,
+        s=10.,
         rasterized=True,
-        label="Other / unclassified",
+        label="_none",
     )
 
     for group in top:
-        ma = groups == group
+        mask = groups == group
         ax.scatter(
             *coords[mask].T,
             color=colors[group],
-            s=20,
+            s=10.,
             rasterized=True,
             label=f"{group} (n={mask.sum()})",
         )
 
     ax.set(
-        xlabel="Gene UMAP 1",
-        ylabel="Gene UMAP 2",
-        title=f"Gene correlations — {kind.upper()}",
+        xlabel="UMAP 1",
+        ylabel="UMAP 2",
     )
     ax.legend(
         title=ANNOTATIONS[kind],
         bbox_to_anchor=(1.02, 1),
         loc="upper left",
         frameon=False,
-        fontsize=8,
+        fontsize=6.,
     )
 
     fig.savefig(
         f"{filename}.{kind}.gene-umap.{fmt}",
-        dpi=300,
+        dpi=600,
         bbox_inches="tight",
     )
-    plt.close(fig)
 
 
 
@@ -298,6 +296,7 @@ def main():
 
     # Without functional annotations, produce one plain
     # correlation heatmap and one uncoloured gene UMAP.
+    _figsaver = figsaver(format=args.plot_format)
     if not args.annotations:
         print_err("No eggNOG annotations: plotting plain correlations")
 
@@ -324,9 +323,8 @@ def main():
                 rasterized=True,
             )
             ax.set(
-                xlabel="Gene UMAP 1",
-                ylabel="Gene UMAP 2",
-                title="Gene expression correlations",
+                xlabel="UMAP 1",
+                ylabel="UMAP 2",
             )
             _figsaver(
                 fig=fig,
@@ -362,7 +360,7 @@ def main():
             )[:args.top_groups]
         ]
 
-        colors = group_colors(groups)
+        colors = group_colors(groups, top)
 
         metadata[f"{kind}_memberships"] = [
             ",".join(terms) for terms in parsed
@@ -388,7 +386,7 @@ def main():
 
         hm = heatmap(
             corr,
-            color_label="Spearman correlation",
+            color_label="Spearman $\\rho$",
             filename=f"{prefix}.{kind}.heatmap",
             output_format=args.plot_format,
             row_colors=strips,

@@ -272,8 +272,8 @@ def _filter(args: Namespace) -> None:
     ).ravel()
     # Retention curve independent of the chosen threshold.
     thresholds = np.unique(np.concatenate((
-        np.array([0, args.min_counts_per_cell]),
-        np.arange(0, max(101, int(cell_counts.max()) + 2), 10),
+        np.array([1, args.min_counts_per_cell]),
+        np.arange(1, max(101, int(cell_counts.max()) + 2), 10),
     )))
 
     retained = np.array([
@@ -296,6 +296,7 @@ def _filter(args: Namespace) -> None:
     ax.set(
         xlabel="Minimum UMIs per cell",
         ylabel="Cells retained",
+        xscale="log",
     )
     _figsaver(
         fig=fig,

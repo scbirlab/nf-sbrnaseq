@@ -19,9 +19,8 @@ jobs:
         # sudo docker image prune --all --force
         # sudo docker builder prune -a
     - run: df -h
+
     - uses: actions/checkout@v4
-    - name: Build test image
-      run: docker build -t nf-sbrnaseq:test .
 
     - name: Test Python environment
       run: |
