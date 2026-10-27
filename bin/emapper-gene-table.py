@@ -26,14 +26,6 @@ FIELDS = (
 )
 
 
-def ec_subclasses(value):
-    return tuple(sorted({
-        ".".join(ec.split(".")[:2])
-        for ec in value.split(",")
-        if len(ec.split(".")) >= 2
-        and all(x.isdigit() for x in ec.split(".")[:2])
-    }))
-
 def reference_metadata(gff):
     """Associate each GFF contig with its NCBI assembly metadata.
 

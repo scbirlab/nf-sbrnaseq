@@ -12,7 +12,8 @@ import numpy as np
 import pandas as pd
 from scipy.sparse import issparse
 
-from viz_utils import heatmap
+from viz_utils import heatmap, end_locus_label
+
 
 def column(matrix, j):
     x = matrix[:, j]
@@ -81,9 +82,29 @@ def main():
     clusters = rna.obs["leiden"].astype(str).to_numpy()
     labels = sorted(np.unique(clusters))
 
+    
     site_depth = np.asarray(counts[eligible].sum(axis=0)).ravel()
-    order = np.argsort(-site_depth, kind="stable")
-    selected = order[:args.top_loci]
+
+    # Select the most abundant loci first.
+    selected = np.argsort(
+        -site_depth, kind="stable"
+    )[:args.top_loci]
+
+    # Display selected loci in genomic coordinate order.
+    positions = mdata_end5.var.iloc[selected].copy()
+    positions["start1"] = pd.to_numeric(
+        positions["start1"], errors="raise"
+    )
+    positions["end1"] = pd.to_numeric(
+        positions["end1"], errors="raise"
+    )
+    positions["_index"] = selected
+
+    positions = positions.sort_values(
+        ["contig", "start1", "end1"],
+        kind="stable",
+    )
+    selected = positions["_index"].to_numpy(dtype=int)
 
     rows = []
     for j in selected:
@@ -107,14 +128,32 @@ def main():
     usage = pd.DataFrame(rows).set_index("locus_id")
     usage.to_csv(f"{args.output}.cluster-usage.csv")
 
-    # Preserve the full locus annotation table.
-    mdata_end5.var.to_csv(f"{args.output}.annotations.csv")
-    
-    heatmap(
-        usage,
+    # Display names are separate from the stable locus IDs.
+    display_labels = [
+        end_locus_label(
+            site,
+            mdata_end5.var.loc[site].get(
+                "feature_attributes", ""
+            ),
+        )
+        for site in usage.index
+    ]
+
+    display_usage = usage[labels].copy()
+    display_usage.index = display_labels
+
+    # Rows are already in genomic coordinate order.
+    # Disable row clustering; retain column clustering.
+    hm = heatmap(
+        display_usage,
         color_label="Fraction of assigned ends",
         filename=f"{args.output}.end5-locus-usage",
         output_format=args.plot_format,
+        row_idx=np.arange(len(display_usage)),
+        figsize=(
+            max(8, len(labels) * 1.1),
+            max(8, len(display_usage) * .35),
+        ),
     )
 
     saver = figsaver(format=args.plot_format)
@@ -165,7 +204,10 @@ def main():
             )
             fig.colorbar(scatter, ax=ax)
             ax.set(
-                title=site,
+                title=end_locus_label(
+                    site,
+                    mdata_end5.var.loc[site].get("feature_attributes", ""),
+                ),
                 xlabel="UMAP 1",
                 ylabel="UMAP 2",
             )

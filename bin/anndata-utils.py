@@ -378,6 +378,18 @@ def _cluster(args: Namespace) -> None:
     adata = sc.read_h5ad(args.input)
     print_err(adata)
 
+
+    # Human-readable plotting labels; preserve var_names.
+    from viz.viz_utils.labels import gene_label
+    adata.var["display_gene"] = [
+        gene_label(gid, symbol, locus)
+        for gid, symbol, locus in zip(
+            adata.var_names,
+            adata.var["Name"].fillna(""),
+            adata.var["locus_tag"].fillna(""),
+        )
+    ]
+
     # Preserve original molecule counts for downstream analyses.
     if "counts" not in adata.layers:
         raise ValueError("Missing raw counts layer")
@@ -572,18 +584,24 @@ def _cluster(args: Namespace) -> None:
         print(f"[warn] dendrogram computation failed: {e}. Proceeding without dendrogram.")
         dendro_arg = False
 
+    
     if adata.obs["leiden"].nunique() > 1:
         sc.pl.rank_genes_groups_matrixplot(
             adata,
             n_genes=min(10, adata.n_vars),
             groupby="leiden",
+            gene_symbols="display_gene",
             dendrogram=dendro_arg,
             save=f"{args.output}.cluster-gene-markers-mean.{args.plot_format}",
         )
-        print_err("Plotting heatmap of gene markers per cell cluster...")
+
+        print_err(
+            "Plotting heatmap of gene markers per cell cluster..."
+        )
         sc.pl.rank_genes_groups_heatmap(
-            adata, 
-            show_gene_labels=True, 
+            adata,
+            gene_symbols="display_gene",
+            show_gene_labels=True,
             save=f"{args.output}.cluster-gene-markers.{args.plot_format}",
         )
 

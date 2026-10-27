@@ -18,28 +18,49 @@ from scipy.sparse import issparse
 from scipy.spatial.distance import squareform
 import umap
 
-from viz_utils import heatmap
+from viz_utils import heatmap, gene_label
 
 
 ANNOTATIONS = {
     "cog": "COG_category",
     "ec": "EC",
     "kegg": "KEGG_Pathway",
+    "kegg_module": "KEGG_Module",
+    "brite": "BRITE",
 }
 
 
 def memberships(value, kind):
-    """Parse functional memberships without losing multi-annotations."""
+    """Parse functional memberships at the requested resolution."""
     if pd.isna(value) or str(value).strip() in ("", "-", "."):
         return ()
 
     value = str(value).strip()
-    terms = list(value) if kind == "cog" else value.split(",")
 
-    return tuple(sorted({
-        term.strip() for term in terms
-        if term.strip() and term.strip() not in ("-", ".")
-    }))
+    if kind == "cog":
+        terms = set(value)
+
+    elif kind == "ec":
+        # Reduce e.g. 2.7.1.39 -> 2.7.
+        # Preserve multiple distinct EC subclasses.
+        terms = set()
+        for ec in value.split(","):
+            parts = ec.strip().split(".")
+            if len(parts) >= 2 and all(
+                part.isdigit() for part in parts[:2]
+            ):
+                terms.add(".".join(parts[:2]))
+
+    else:
+        terms = {
+            term.strip() for term in value.split(",")
+        }
+
+    return tuple(sorted(
+        term for term in terms
+        if term and term not in ("-", ".")
+    ))
+
 
 
 def primary_groups(values, kind):
@@ -283,6 +304,24 @@ def main():
     )
 
     corr, distances, hierarchy = correlations(frame)
+
+    gene_info = rna.var.reindex(corr.index)
+
+    labels = [
+        gene_label(gid, symbol, locus)
+        for gid, symbol, locus in zip(
+            corr.index,
+            gene_info["Name"].fillna(""),
+            gene_info["locus_tag"].fillna(""),
+        )
+    ]
+
+    # Preserve stable IDs for calculations and exports.
+    # Relabel only the matrix passed to plotting.
+    display_corr = corr.copy()
+    display_corr.index = labels
+    display_corr.columns = labels
+
     corr.to_csv(f"{prefix}.matrix.csv")
 
     coords = gene_embedding(distances)
@@ -301,7 +340,7 @@ def main():
         print_err("No eggNOG annotations: plotting plain correlations")
 
         hm = heatmap(
-            corr,
+            display_corr,
             color_label="Spearman $\\rho$",
             filename=f"{prefix}.heatmap",
             output_format=args.plot_format,
@@ -379,13 +418,13 @@ def main():
         ]
 
         strips = pd.Series(
-            metadata[f"{kind}_heatmap_color"],
-            index=corr.index,
+            metadata[f"{kind}_heatmap_color"].to_numpy(),
+            index=display_corr.index,
             name=kind.upper(),
         )
 
         hm = heatmap(
-            corr,
+            display_corr,
             color_label="Spearman $\\rho$",
             filename=f"{prefix}.{kind}.heatmap",
             output_format=args.plot_format,
