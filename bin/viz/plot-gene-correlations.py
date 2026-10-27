@@ -330,6 +330,7 @@ def main():
         index=corr.index,
         columns=["UMAP_1", "UMAP_2"],
     )
+    df.to_csv(f"{prefix}.gene-umap.csv")
 
     size = max(7, min(28, len(corr) * .15))
 

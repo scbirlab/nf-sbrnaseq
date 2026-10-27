@@ -36,7 +36,9 @@ with tempfile.TemporaryDirectory() as temp:
     rna.write_h5ad(h5ad)
 
     annotations = pd.DataFrame({
-        "contig": ["chr1"] * 20,
+        "genome_accession": ["acc"] * 20,
+        "assembly": ["asm"] * 20,
+        "chr": ["chr1"] * 20,
         "gene_id": [f"g{i}" for i in range(20)],
         "COG_category": [
             "JK", "J", "E", "E", "F", "F",
