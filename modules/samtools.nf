@@ -100,32 +100,47 @@ process SAMtools_coverage {
 
 }
 
+
 process remove_multimappers {
 
     tag "${id}"
     label 'big_mem'
 
-    // publishDir( 
-    //     "${params.outputs}/samtools", 
-    //     mode: 'copy',
-    //     saveAs: { "${id}.${it}" },
-    // )
-
     input:
     tuple val( id ), path( bamfile )
+    val mapper
+    val min_mapq
+    val require_unique
 
     output:
     tuple val( id ), path( "*.sorted.{bam,bai}" )
 
     script:
+    def unique = (require_unique && (mapper == 'star') ? "-e '[NH]==1'" : "")
     """
-    # filter out multimappers
-    #samtools view -@ ${task.cpus} -F2308 -bS --min-MQ=1 "${bamfile}" -o filtered.bam
-    samtools view -@ ${task.cpus} -bS "${bamfile}" -o filtered.bam
-    samtools sort -@ ${task.cpus} -m 2G filtered.bam -o "${id}.sorted.bam"
-    samtools index "${id}.sorted.bam" -o "${id}.sorted.bai"
-    rm filtered.bam
-    
-    """
+    set -euox pipefail
 
+    # Exclude unmapped, secondary and supplementary alignments.
+    # Apply minimum mapping confidence.
+    #
+    # STAR: NH==1 is required in strict mode.
+    # Bowtie2/minimap2: use MAPQ and primary status;
+    # neither provides a universally reliable NH tag.
+
+    samtools view \\
+        -@ ${task.cpus} \\
+        -b \\
+        -F ${require_unique ? '2308' : '260'} \\
+        -q ${min_mapq} ${unique} \\
+        "${bamfile}" \\
+    | samtools sort \\
+        -@ ${task.cpus} \\
+        -m ${Math.round(Math.floor(task.memory.getMega() * 0.8 / task.cpus))}M \\
+        -o "${id}.sorted.bam" -
+
+    samtools index "${id}.sorted.bam" -o "${id}.sorted.bai"
+
+    samtools quickcheck -v "${id}.sorted.bam"
+
+    """
 }

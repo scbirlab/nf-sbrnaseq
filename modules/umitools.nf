@@ -46,17 +46,33 @@ process UMItools_extract {
    do
       zcat \$f \
       | awk '
-         NR % 4 == 1 { name = \$0 } 
-         NR % 4 == 2 { if (length(\$0) > 0) { seq = \$0 } else { seq = "N" } } 
-         NR % 4 == 0 { if (length(\$0) > 0) { qual = \$0 } else { qual = "?" } } 
-         ( NR > 1 && NR % 4 == 1 ) { print name ORS seq ORS "+" ORS qual } 
-         END { print name ORS seq ORS "+" ORS qual }
-         ' \
+         NR % 4 == 1 { header = \$0; next }
+         NR % 4 == 2 { seq = \$0; next }
+         NR % 4 == 3 { plus = \$0; next }
+         NR % 4 == 0 {
+            qual = \$0
+            if (length(seq) == 0 && length(qual) == 0) {
+                  seq = "N"
+                  qual = "!"
+            }
+            if (length(seq) != length(qual)) {
+                  print "Invalid FASTQ record at line " NR > "/dev/stderr"
+                  exit 1
+            }
+            print header ORS seq ORS plus ORS qual
+         }
+         END {
+            if (NR % 4 != 0) {
+                  print "Truncated FASTQ" > "/dev/stderr"
+                  exit 1
+            }
+         }
+      ' \
       | pigz -v --stdout -p ${task.cpus} \
       > \$(basename \$f .fastq.gz).extracted.fastq.gz
    done
 
-   rm "${id}"_R?.extracted0.fastq.gz
+   rm "${id}"_R?.extracted0.fastq.gz wl.txt
 
    """
 }
@@ -111,7 +127,11 @@ process bam2table {
 
    script:
    """
-   samtools view -h -F${paired ? "1664 -f3" : "1536"} \
+   set -eoux pipefail 
+   
+   samtools view -h \
+      -@${task.cpus} \
+      -F${paired ? "1664 -f3" : "3844"} \
       --tag 'XS:Assigned' \
       "${bamfile}" \
       -bS -o filtered.bam
@@ -137,6 +157,14 @@ process bam2table {
       }
    ' \
    > tab.tsv
+
+   NUNIQUE="\$(tail -n+2 tab.tsv | cut -f1 | sort -u | wc -l)"
+   NLINES="\$(tail -n+2 tab.tsv | wc -l)"
+   if [ "\$NLINES" -gt "\$NUNIQUE" ]
+   then
+      >&2 echo "Read IDs are not unique: n lines = \$NLINES; unique read IDs = \$NUNIQUE."
+      exit 1
+   fi
 
    rm filtered.bam
 
@@ -171,7 +199,7 @@ process counts_per_gene_awk {
       END { 
          for (key in u) {
             split( key, k, SUBSEP ); 
-            print k[1], k[2], u[key], r[key]
+            print k[1], k[2], u1[key], r[key]
          }
       }
    '  "${tabfile}" \
@@ -210,17 +238,10 @@ process counts_per_gene {
          sep="\\t",
       )
       .groupby(["chr", "gene_id"])
-      .agg({
-         "umi": "nunique",
-         "umi_read_count": "sum",
-      })
-      .rename(columns={
-         "umi": "umi_count",
-         "umi_read_count": "read_count",
-      })
-      .rename(columns={
-         "umi": "umi_count",
-      })
+      .agg(
+         umi_count=("read_id", "size"),
+         read_count=("umi_cluster_size", "sum"),
+      )
       .to_csv(
          "counts_per_gene.tsv",
          sep="\\t",
@@ -295,14 +316,10 @@ process counts_per_cell {
          sep="\\t",
       )
       .groupby("cell_barcode")
-      .agg({
-         "umi": "nunique",
-         "umi_read_count": "sum",
-      })
-      .rename(columns={
-         "umi": "umi_count",
-         "umi_read_count": "read_count",
-      })
+      .agg(
+         umi_count=("read_id", "size"),
+         read_count=("umi_cluster_size", "sum"),
+      )
       .to_csv(
          "counts_per_cell.tsv",
          sep="\\t",
@@ -381,14 +398,10 @@ process counts_per_gene_per_cell {
          sep="\\t",
       )
       .groupby(["chr", "gene_id", "cell_barcode"])
-      .agg({
-         "umi": "nunique",
-         "umi_read_count": "sum",
-      })
-      .rename(columns={
-         "umi": "umi_count",
-         "umi_read_count": "read_count",
-      })
+      .agg(
+         umi_count=("read_id", "size"),
+         read_count=("umi_cluster_size", "sum"),
+      )
       .to_csv(
          "counts_per_gene_per_cell.tsv",
          sep="\\t",
@@ -470,7 +483,10 @@ process UMItools_count {
    script:
    """
    samtools view -F1024 "${bamfile}" \
-   | samtools sort - -@ ${task.cpus} -m ${Math.round(task.memory.getGiga() * 0.8)}G -o sorted.bam
+   | samtools sort - \
+      -@ ${task.cpus} \
+      -m "${Math.round((task.memory.getMega() / task.cpus) * 0.8)}M" \
+      -o sorted.bam
    samtools index sorted.bam
    umi_tools count \
 		--per-gene \

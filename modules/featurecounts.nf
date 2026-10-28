@@ -6,9 +6,9 @@
 process featurecounts {
 
    tag "${id}"
-   label 'big_cpu'
+   label 'big_mem'
 
-   errorStrategy 'ignore'
+   //errorStrategy 'ignore'
    // maxRetries 2
 
    publishDir( 
@@ -34,6 +34,8 @@ process featurecounts {
 
    script:
    """
+   set -euox pipefail
+   
    # make species -> chromosome mapping
    awk -F'\\t' -v OFS='\\t' '
       BEGIN { print "taxon_url", "assembly", "genome_accession", "Chr" }
@@ -52,7 +54,7 @@ process featurecounts {
       "${gff}" \
    > "${id}".species-chr-map.tsv
 
-   samtools view -h ${reverse_mate ? "-f128" : ""} \
+   samtools view -h -@${task.cpus} ${reverse_mate ? "-f128" : ""} \
       "${bamfile}" -o "${id}.bam"
    samtools index "${id}.bam"
    featureCounts \
@@ -62,7 +64,6 @@ process featurecounts {
       -a "${gff}" \
       ${nanopore ? "-L" : "-p"} ${(reverse_mate || nanopore) ? "" : "-B -C --countReadPairs"} -R BAM \
       -T ${task.cpus} \
-      -M \
       --verbose \
       --extraAttributes ID,Name,gene_biotype,locus_tag \
       -o "${id}.featureCounts0.tsv" \

@@ -16,7 +16,7 @@ import pandas as pd
 import numpy as np
 import scanpy as sc
 
-from scipy.sparse import csr_matrix, coo_matrix
+from scipy.sparse import csr_matrix, coo_matrix, issparse
 from pandas.api.types import CategoricalDtype
 
 CELL_ID = ["cell_barcode"]
@@ -225,7 +225,7 @@ def _build(args: Namespace) -> None:
         grid_columns=[
             "n_cells_by_counts", 
             "total_counts", 
-            "length", 
+            "Length", 
             "pct_dropout_by_counts",
             "pseudobulk_read_count",
         ],
@@ -242,7 +242,8 @@ def _build(args: Namespace) -> None:
         name=f"{args.output}.gene-qc",
         df=adata.var,
     )
-    sc.pp.log1p(adata)
+
+    adata.layers["counts"] = adata.X.copy()
 
     save_anndata(adata, f"{args.output}", printf=print_err)
 
@@ -252,29 +253,112 @@ def _build(args: Namespace) -> None:
 @clicommand(message="Filtering AnnData with the following parameters")
 def _filter(args: Namespace) -> None:
 
+    _figsaver = figsaver(format=args.plot_format)
     adata = sc.read_h5ad(args.input)
 
-    # Want to relax the cutoff with low counts to keep at least 1000 cells
-    max_cutoff = adata.obs.nlargest(
-        args.min_cells, 
-        'total_counts',
-    )['total_counts'].min()
-    max_cutoff = max(1, min(int(max_cutoff), args.min_counts_per_cell))
-    print_err(f"Filtering cells with {max_cutoff=}...")
-    adata = adata[adata.obs['total_counts'] >= max_cutoff]
+    if "counts" not in adata.layers:
+        raise ValueError("Missing raw counts layer")
 
-    # Want to relax the cutoff with low counts to keep at least {MIN_GENES_TO_KEEP} genes
-    max_cutoff = adata.var.nlargest(
-        args.min_genes + 1, 
-        'n_cells_by_counts',
-    )['n_cells_by_counts'].min()
-    max_cutoff = max(1, min(int(max_cutoff) - 1, args.min_cells_per_gene))
-    print_err(f"Filtering genes with {max_cutoff=}...")
-    sc.pp.filter_genes(
-        adata, 
-        min_cells=max_cutoff,
+    if args.min_counts_per_cell < 1 or args.min_cells_per_gene < 1:
+        raise ValueError("Filtering thresholds must be positive integers")
+
+    n_cells_before, n_genes_before = adata.shape
+
+    # Use untransformed molecule counts for filtering.
+    adata.X = adata.layers["counts"].copy()
+
+    cell_counts = np.asarray(
+        adata.layers["counts"].sum(axis=1)
+    ).ravel()
+    # Retention curve independent of the chosen threshold.
+    thresholds = np.unique(np.concatenate((
+        np.array([1, args.min_counts_per_cell]),
+        np.arange(1, max(101, int(cell_counts.max()) + 2), 10),
+    )))
+
+    retained = np.array([
+        np.count_nonzero(cell_counts >= threshold)
+        for threshold in thresholds
+    ])
+
+    retention = pd.DataFrame({
+        "min_counts_per_cell": thresholds,
+        "n_cells": retained,
+        "fraction_retained": retained / n_cells_before,
+    })
+    
+    fig, ax = grid(aspect_ratio=1.5)
+    ax.plot(thresholds, retained)
+    ax.axvline(
+        args.min_counts_per_cell,
+        color="lightgrey",
+    )
+    ax.set(
+        xlabel="Minimum UMIs per cell",
+        ylabel="Cells retained",
+        xscale="log",
+    )
+    _figsaver(
+        fig=fig,
+        name=f"{args.output}.cell-retention",
+        df=retention,
     )
 
+    if adata.n_obs == 0:
+        raise ValueError(
+            "No cells passed the UMI threshold"
+        )
+
+    # Apply explicit cell threshold.
+    keep_cells = cell_counts >= args.min_counts_per_cell
+    adata = adata[keep_cells, :].copy()
+
+    if adata.n_obs == 0:
+        raise ValueError("No cells passed the UMI threshold")
+
+    # Filter genes based on detection among retained cells.
+    sc.pp.filter_genes(
+        adata,
+        min_cells=args.min_cells_per_gene,
+    )
+    # Remove cells left empty after gene filtering.
+    remaining_counts = np.asarray(
+        adata.layers["counts"].sum(axis=1)
+    ).ravel()
+
+    n_empty = int(np.count_nonzero(remaining_counts == 0))
+    print_err(f"Cells emptied by gene filtering: {n_empty}")
+
+    adata = adata[remaining_counts > 0].copy()
+
+    if adata.n_vars == 0:
+        raise ValueError(
+            "No genes passed the detection threshold"
+        )
+    remaining = np.asarray(
+        adata.layers["counts"].sum(axis=1)
+    ).ravel()
+
+    adata = adata[remaining > 0, :].copy()
+
+    if adata.n_obs == 0:
+        raise ValueError("No cells with nonzero counts after filtering")
+    # Record the applied thresholds and retention.
+    adata.uns["filtering"] = {
+        "min_counts_per_cell": args.min_counts_per_cell,
+        "min_cells_per_gene": args.min_cells_per_gene,
+        "n_cells_before": n_cells_before,
+        "n_cells_after": adata.n_obs,
+        "n_genes_before": n_genes_before,
+        "n_genes_after": adata.n_vars,
+    }
+
+    print_err(
+        f"Retained {adata.n_obs}/{n_cells_before} cells "
+        f"and {adata.n_vars}/{n_genes_before} genes"
+    )
+
+    
     save_anndata(adata, f"{args.output}.filtered", printf=print_err)
 
     plot_barnyard(
@@ -294,8 +378,44 @@ def _cluster(args: Namespace) -> None:
     adata = sc.read_h5ad(args.input)
     print_err(adata)
 
-    print_err("Annotating highly variable genes...")
+
+    # Human-readable plotting labels; preserve var_names.
+    from viz.viz_utils.labels import gene_label
+    adata.var["display_gene"] = [
+        gene_label(gid, symbol, locus)
+        for gid, symbol, locus in zip(
+            adata.var_names,
+            adata.var["Name"].astype(str).fillna(""),
+            adata.var["locus_tag"].astype(str).fillna(""),
+        )
+    ]
+
+    # Preserve original molecule counts for downstream analyses.
+    if "counts" not in adata.layers:
+        raise ValueError("Missing raw counts layer")
+
+    # Ensure only cells with positive total counts are normalised.
+    library_sizes = np.asarray(
+        adata.layers["counts"].sum(axis=1)
+    ).ravel()
+    if np.any(library_sizes <= 0):
+        raise ValueError(
+            "Cannot normalise cells with zero molecule counts"
+        )
+
+    # Standard library-size normalisation for exploratory
+    # dimensionality reduction.
     adata.var["not_is_rRNA"] = (~adata.var["is_rRNA"])
+    adata.X = adata.layers["counts"].copy()
+    sc.pp.normalize_total(adata)
+    sc.pp.log1p(adata)
+
+    adata.uns["normalization"] = {
+        "method": "normalize_total_log1p",
+        "raw_counts_layer": "counts",
+    }
+
+    print_err("Annotating highly variable genes...")
     try:
         sc.pp.highly_variable_genes(
             adata,
@@ -309,43 +429,73 @@ def _cluster(args: Namespace) -> None:
         print_err(f"Found {adata.var['highly_variable_non_rRNA'].sum()} highly variable genes!")
         use_highly_variable = adata.var['highly_variable_non_rRNA'].sum() >= 3
 
+    
     print_err("Applying PCA...")
-    try:
-        sc.pp.pca(
-            adata, 
-            mask_var="highly_variable_non_rRNA" if use_highly_variable else "not_is_rRNA",
+
+    mask = (
+        "highly_variable_non_rRNA"
+        if use_highly_variable else "not_is_rRNA"
+    )
+
+    if int(adata.var[mask].sum()) < 3:
+        raise ValueError(
+            "Fewer than three non-rRNA genes available for PCA"
         )
-    except ValueError as e:
-        print_err(e)
+
+    n_comps = min(50, adata.n_obs - 1, int(adata.var[mask].sum()) - 1)
+
+    if n_comps < 2:
+        raise ValueError("Insufficient dimensions for PCA")
+
+    sc.pp.pca(
+        adata,
+        n_comps=n_comps,
+        mask_var=mask,
+        random_state=42,
+    )
+
     print_err("Getting nearest neighbours...")
     sc.pp.neighbors(
-        adata, 
-        metric='euclidean',
+        adata,
+        n_neighbors=min(15, adata.n_obs - 1),
+        metric="euclidean",
+        use_rep="X_pca",
+        random_state=42,
     )
-    print_err("Carrying out Leiden clustering on cells...")
+
+    print_err("Carrying out Leiden clustering...")
     sc.tl.leiden(
-        adata, 
-        key_added="leiden", 
-        resolution=1.,
-        flavor='igraph',
+        adata,
+        key_added="leiden",
+        resolution=1.0,
+        flavor="igraph",
         directed=False,
+        random_state=42,
     )
-    print_err(f"Found {adata.obs['leiden'].cat.categories.size} Leiden clusters of cells!")
-    print_err("Finding gene markers per cell cluster...")
-    sc.tl.rank_genes_groups(
-        adata, 
-        "leiden",
-        mask_var="highly_variable_non_rRNA" if use_highly_variable else "not_is_rRNA",
-        method="t-test",
-        rankby_abs=True,
+
+    print_err(
+        f"Found {adata.obs['leiden'].cat.categories.size} clusters"
     )
+
+    if adata.obs["leiden"].nunique() > 1:
+        sc.tl.rank_genes_groups(
+            adata,
+            "leiden",
+            mask_var=mask,
+            method="t-test",
+            rankby_abs=True,
+            use_raw=False,
+        )
+
     print_err("Embedding as UMAP...")
     sc.tl.umap(
-        adata, 
-        min_dist=.1,  # umap-learn default = .1
+        adata,
+        min_dist=.1,
         spread=1.,
+        random_state=42,
     )
-    save_anndata(adata, f"{args.output}.clustered", printf=print_err)
+
+    save_anndata(adata, f"{args.output}", printf=print_err)
 
     n_genes, n_cells = adata.n_vars, adata.n_obs
     biotype_flags = [c for c in adata.obs if c.startswith("is_")]
@@ -376,11 +526,10 @@ def _cluster(args: Namespace) -> None:
     for ax, col in zip(axes, colors_to_plot):
         colors = adata.obs[col]
         col_is_categorical = isinstance(colors, pd.Series) and colors.dtype in ("category", "object", "str")
-        use_log = (not col_is_categorical and np.any(colors > 0.) and col in log_colors)
+        use_log = (not col_is_categorical and np.all(colors > 0.) and col in log_colors)
         plotter = partial(
             ax.scatter,
             s=.5,
-            alpha=.7,
             plotnonfinite=True,
         )
         if col_is_categorical:
@@ -390,9 +539,9 @@ def _cluster(args: Namespace) -> None:
                     *adata[adata.obs[col].cat.codes == i].obsm['X_umap'].T,
                     label=i,
                 )
-            ax.legend(
+        ax.legend(
             loc='upper center',
-            bbox_to_anchor=(0.5, -0.2),
+            bbox_to_anchor=(.5, -.2),
             ncol=7,
         )
         if not col_is_categorical:
@@ -411,16 +560,20 @@ def _cluster(args: Namespace) -> None:
     _figsaver(
         fig=fig,
         name=f'{args.output}.umap',
-        df=pd.DataFrame(adata.obsm['X_umap'], columns=["UMAP_1", "UMAP_2"], index=adata.obs_names),
+        df=pd.DataFrame(
+            adata.obsm['X_umap'], 
+            columns=["UMAP_1", "UMAP_2"], 
+            index=adata.obs_names,
+        ),
     )
     print_err("Plotting heatmap of mean gene markers per cell cluster...")
     # Compute a dendrogram on a dense representation only (avoids pandas+csr bug)
     try:
-        if "X_pca" in adata.obsm_keys():
+        if "X_pca" in adata.obsm:
             sc.tl.dendrogram(adata, groupby="leiden", use_rep="X_pca", key_added="dendrogram_leiden")
             dendro_arg = "dendrogram_leiden"
         else:
-            if sp.issparse(adata.X):
+            if issparse(adata.X):
                 adata.obsm["X_dense"] = adata.X.toarray()
                 rep = "X_dense"
             else:
@@ -430,37 +583,33 @@ def _cluster(args: Namespace) -> None:
     except Exception as e:
         print(f"[warn] dendrogram computation failed: {e}. Proceeding without dendrogram.")
         dendro_arg = False
-    sc.pl.rank_genes_groups_matrixplot(
-        adata,
-        n_genes=min(10, adata.n_vars),
-        groupby="leiden",
-        dendrogram=dendro_arg,
-        save=f"{args.output}.cluster-gene-markers-mean.{args.plot_format}",
-    )
-    print_err("Plotting heatmap of gene markers per cell cluster...")
-    sc.pl.rank_genes_groups_heatmap(
-        adata, 
-        show_gene_labels=True, 
-        save=f"{args.output}.cluster-gene-markers.{args.plot_format}",
-    )
+
+    
+    if adata.obs["leiden"].nunique() > 1:
+        sc.pl.rank_genes_groups_matrixplot(
+            adata,
+            n_genes=min(10, adata.n_vars),
+            groupby="leiden",
+            gene_symbols="display_gene",
+            dendrogram=dendro_arg,
+            save=f"{args.output}.cluster-gene-markers-mean.{args.plot_format}",
+        )
+
+        print_err(
+            "Plotting heatmap of gene markers per cell cluster..."
+        )
+        sc.pl.rank_genes_groups_heatmap(
+            adata,
+            gene_symbols="display_gene",
+            show_gene_labels=True,
+            save=f"{args.output}.cluster-gene-markers.{args.plot_format}",
+        )
 
     return None
 
 
 def main() -> None:
 
-    min_cells = CLIOption(
-        '--min-cells', '-c', 
-        type=int, 
-        default=MIN_CELLS_TO_KEEP,
-        help='Minimum number of cells to retain after filtering.',
-    )
-    min_genes = CLIOption(
-        '--min-genes', '-g', 
-        type=int, 
-        default=MIN_GENES_TO_KEEP,
-        help='Minimum number of genes to retain after filtering.',
-    )
     min_counts_per_cell = CLIOption(
         '--min-counts-per-cell', '-C', 
         type=int, 
@@ -516,11 +665,9 @@ def main() -> None:
         description="Filter AnnData (hd5) objects based on gene and cell counts.",
         main=_filter,
         options=[
-            inputs, 
+            inputs,
             min_counts_per_cell,
             min_cells_per_gene,
-            min_cells,
-            min_genes,
             plot_format,
             outputs,
         ],

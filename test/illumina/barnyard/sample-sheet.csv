@@ -1,0 +1,2 @@
+sample_id,fastq_pattern,genome_accession,bc1,bc2,bc3,adapter_read1_5prime,adapter_read2_5prime,adapter_read1_3prime,adapter_read2_3prime,umi_read1,umi_read2
+synthetic_illumina,synthetic_illumina,GCF_000005845.2+GCF_000009045.1,bc1.csv,bc2.csv,bc3.csv,ACGTTCGA,TGCAGTCA,GTCAGTCA,CTAGGCTA,^(?P<discard_1>.{8})(?P<cell_1>.{7})(?P<discard_2>.{3}).*,^(?P<discard_3>.{8})(?P<cell_2>.{7})(?P<cell_3>.{7})(?P<umi_1>.{8})(?P<discard_4>.{2}).*

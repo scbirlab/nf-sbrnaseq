@@ -1,11 +1,12 @@
 .nextflow*
+*.log
+*.html
 .conda/
 .docker/
 .singularity/
 test/*/outputs/
-test/*/.nextflow/
-test/*/work/
-test/*/*.html
-test/*/*.log
+test/*/*/outputs/
+test/_db/
 work/
-*.html
+__pycache__/
+*.pyc
